@@ -71,15 +71,14 @@
 ## WIN Linux IOS совместимые клиенты WDTT
 **Моё любимое**
 - [luminescq/PWDTT](https://github.com/luminescq/PWDTT) - Хороший порт WDTT на Windows & Linux
-
 - [anton48/vk-turn-proxy-ios](https://github.com/anton48/vk-turn-proxy-ios) — Самодостаточный проект для IOS совместимый с WDTT (server core)(высокий фактор доверия у репозитория)
-
+  
+Улучшенные форки WDTT на андроид:
+- [SpaceNeuroX/proxy-turn-vk-android](https://github.com/SpaceNeuroX/proxy-turn-vk-android)
+- [Ivan4537/WDTT-Plus](https://github.com/Ivan4537/WDTT-Plus)
 
 **Альтеративный форк под Windows**
 - [IGOR7276/proxy-turn-vk-windows](https://github.com/IGOR7276/proxy-turn-vk-windows)
-
-**Улучшенный форк qWDTT на андроид**
-- [SpaceNeuroX/proxy-turn-vk-android](https://github.com/SpaceNeuroX/proxy-turn-vk-android)
 
 *(Я не несу ответвености за ваше использование сторонних клиентов совместимых с WDTT)*
 
