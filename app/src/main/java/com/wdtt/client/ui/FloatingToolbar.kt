@@ -27,7 +27,6 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.wdtt.client.SettingsStore
 import androidx.compose.ui.res.painterResource
@@ -43,11 +42,13 @@ import kotlin.math.roundToInt
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 
 @Composable
 fun FloatingToolbar(
+    settingsStore: SettingsStore,
     activeProfile: Int,
     onActiveProfileChange: (Int) -> Unit,
     currentTheme: String,
@@ -168,8 +169,8 @@ fun FloatingToolbar(
                 Surface(
                     shape = RoundedCornerShape(32.dp),
                     color = MaterialTheme.colorScheme.surface,
-                    shadowElevation = 8.dp,
-                    tonalElevation = 8.dp,
+                    shadowElevation = 0.dp,
+                    tonalElevation = 0.dp,
                     modifier = Modifier.fillMaxWidth(0.9f)
                 ) {
                     Column(
@@ -344,7 +345,7 @@ fun FloatingToolbar(
                                         "chrome" -> "Chrome"
                                         "safari" -> "Safari"
                                         "firefox" -> "FireFox"
-                                        else -> fp.capitalize()
+                                        else -> fp.replaceFirstChar { if (it.isLowerCase()) it.titlecase(java.util.Locale.getDefault()) else it.toString() }
                                     }
                                     Text(
                                         text = fpName,
@@ -374,8 +375,6 @@ fun FloatingToolbar(
                     val scope = rememberCoroutineScope()
                     val clientIdsList = activeClientIds.split(",").map { it.trim() }.filter { it.isNotEmpty() }
                     
-                    val context = LocalContext.current
-                    val settingsStore = remember { SettingsStore(context) }
                     val checkResultsJson by settingsStore.clientIdCheckResults.collectAsStateWithLifecycle(initialValue = "{}")
                     
                     var checkResults by remember(checkResultsJson) { 
@@ -393,7 +392,7 @@ fun FloatingToolbar(
 
                     var isChecking by remember { mutableStateOf(false) }
 
-                    val knownIds = listOf("6287487", "8202606")
+                    val knownIds = listOf("8202606", "6287487")
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         knownIds.forEach { id ->
                             Row(
@@ -423,10 +422,13 @@ fun FloatingToolbar(
                                     )
                                 }
                                 if (checkResults.containsKey(id)) {
-                                    Text(
-                                        text = if (checkResults[id] == true) "✅" else "❌",
-                                        fontSize = 12.sp
-                                    )
+                                     val isValid = checkResults[id] == true
+                                     Icon(
+                                         imageVector = if (isValid) Icons.Default.Check else Icons.Default.Close,
+                                         contentDescription = null,
+                                         tint = MaterialTheme.colorScheme.primary,
+                                         modifier = Modifier.size(16.dp)
+                                     )
                                 }
                             }
                         }
@@ -474,20 +476,18 @@ private fun checkVkClientId(appId: String): Boolean {
             val stream = if (code >= 400) conn.errorStream else conn.inputStream
             val response = stream?.bufferedReader()?.readText() ?: ""
             
-            // If it returns a json error like {"error":"invalid_client"...}
+            
             if (response.contains("\"error\"") && (response.contains("invalid_client") || response.contains("invalid_request"))) {
                 return false
             }
-            // If it returns HTML (login form or captcha), it's a valid client ID
+            
             return true
         } catch (e: Exception) {
-            // Error, will retry
+            
         }
     }
     return false
 }
-
-
 
 @Composable
 private fun ThemeOption(

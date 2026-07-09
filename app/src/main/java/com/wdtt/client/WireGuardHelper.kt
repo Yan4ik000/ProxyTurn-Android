@@ -64,14 +64,14 @@ class WireGuardHelper(context: Context) {
             }
             if (parsedConfig.`interface`.mtu.isPresent) {
                 val serverMtu = parsedConfig.`interface`.mtu.get()
-                // Используем серверное значение, но не менее 1280 для мобильных сетей
+                
                 builder.parseMtu(serverMtu.coerceAtLeast(1280).toString())
             } else {
                 builder.parseMtu("1280")
             }
             builder.parsePrivateKey(parsedConfig.`interface`.keyPair.privateKey.toBase64())
 
-            // WDTT and VK calls must stay outside the VPN transport path.
+            
             val settingsStore = SettingsStore(appContext)
             settingsStore.migrateLegacyWhitelistMode()
             val savedExcluded = settingsStore.excludedApps.first()
@@ -107,7 +107,7 @@ class WireGuardHelper(context: Context) {
                 if (peer.endpoint.isPresent) peerBuilder.parseEndpoint(peer.endpoint.get().toString())
                 if (peer.persistentKeepalive.isPresent) peerBuilder.parsePersistentKeepalive(peer.persistentKeepalive.get().toString())
             }
-            // Override AllowedIPs
+            
             peerBuilder.parseAllowedIPs("0.0.0.0/0")
             
             val finalConfig = Config.Builder()

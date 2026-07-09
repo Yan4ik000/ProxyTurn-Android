@@ -21,9 +21,9 @@ class WdttApplication : Application() {
         super.onCreate()
         DeployManager.init(this)
         
-        // Очищаем фантомный VPN при холодном старте приложения (например, после перезагрузки телефона).
-        // Если телефон перезагрузился, система Android пытается сама восстановить VpnService, 
-        // что приводит к фантомному ключу без интернета. Этот код мгновенно сбрасывает статус в DOWN.
+        
+        
+        
         CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
             runCatching {
                 val backend = getBackend(this@WdttApplication)
@@ -35,7 +35,7 @@ class WdttApplication : Application() {
             }
         }
 
-        // Реактивно обновляем все виджеты на домашнем экране при изменении состояния туннеля
+        
         CoroutineScope(SupervisorJob() + Dispatchers.Main).launch {
             try {
                 TunnelManager.running.collect {
@@ -46,7 +46,7 @@ class WdttApplication : Application() {
             }
         }
 
-        // Реактивно отслеживаем флаг логирования
+        
         val settingsStore = SettingsStore(this)
         CoroutineScope(SupervisorJob() + Dispatchers.Main).launch {
             try {

@@ -23,8 +23,8 @@ class QuickToggleTileService : TileService() {
 
     override fun onStartListening() {
         super.onStartListening()
-        // Реактивно подписываемся на статус активности туннеля.
-        // Плитка будет строго отражать РЕАЛЬНОЕ состояние туннеля на 100% без рассинхронизаций.
+        
+        
         stateJob?.cancel()
         stateJob = scope.launch {
             try {
@@ -46,21 +46,21 @@ class QuickToggleTileService : TileService() {
         super.onClick()
         runCatching {
             if (TunnelManager.running.value) {
-                // Если запущен — останавливаем. Состояние плитки изменится автоматически,
-                // когда TunnelManager остановит процессы и обновит статус running в false.
+                
+                
                 val stopIntent = Intent(this, TunnelService::class.java).apply { action = "STOP" }
                 startService(stopIntent)
                 return
             }
 
-            // Проверяем наличие выданного разрешения VPN перед стартом
+            
             if (VpnService.prepare(this) != null) {
                 Toast.makeText(this, "Откройте WDTT и выдайте VPN-разрешение", Toast.LENGTH_LONG).show()
                 openMainActivity()
                 return
             }
 
-            // Запускаем старт туннеля в фоне
+            
             scope.launch {
                 try {
                     val intent = buildStartIntent()
@@ -118,6 +118,7 @@ class QuickToggleTileService : TileService() {
                 putExtra("captcha_solve_method", store.captchaSolveMethod.first())
                 putExtra("fingerprint", store.selectedFingerprint.first())
                 putExtra("client_ids", store.activeClientIds.first())
+                putExtra("obfs_mode", store.obfsMode.first())
             }
         }.getOrNull()
     }

@@ -55,7 +55,7 @@ class SettingsStore(context: Context) {
         
         private val DETAILED_LOGS = booleanPreferencesKey("detailed_logs")
         
-        // ═══ Пароли и Управление ═══
+        
         private val CONNECTION_PASSWORD = stringPreferencesKey("connection_password")
         private val CONNECTION_PASSWORD_ENCRYPTED = stringPreferencesKey("connection_password_encrypted")
         private val DEPLOY_MAIN_PASSWORD = stringPreferencesKey("deploy_main_password")
@@ -65,27 +65,28 @@ class SettingsStore(context: Context) {
         private val DEPLOY_BOT_TOKEN = stringPreferencesKey("deploy_bot_token")
         private val DEPLOY_BOT_TOKEN_ENCRYPTED = stringPreferencesKey("deploy_bot_token_encrypted")
 
-        // ═══ Proxy Mode ═══
-        private val PROXY_MODE = stringPreferencesKey("proxy_mode") // "tun" or "socks5"
+        
+        private val PROXY_MODE = stringPreferencesKey("proxy_mode") 
         private val PROXY_HOST = stringPreferencesKey("proxy_host")
         private val PROXY_PORT = intPreferencesKey("proxy_port")
 
-        // ═══ Captcha Solve Mode ═══
-        private val VK_AUTH_MODE = stringPreferencesKey("vk_auth_mode") // "vkcalls" or "legacy"
-        private val CAPTCHA_MODE = stringPreferencesKey("captcha_mode") // "auto", "wv", or "rjs"
-        private val CAPTCHA_SOLVE_METHOD = stringPreferencesKey("captcha_solve_method") // "manual" or "auto"
-        private val CAPTCHA_WBV_SOLVE_METHOD = stringPreferencesKey("captcha_wbv_solve_method") // "manual" or "auto"
         
-        // ═══ VPN Exclusions Mode ═══
+        private val VK_AUTH_MODE = stringPreferencesKey("vk_auth_mode") 
+        private val OBFS_MODE = stringPreferencesKey("obfs_mode") 
+        private val CAPTCHA_MODE = stringPreferencesKey("captcha_mode") 
+        private val CAPTCHA_SOLVE_METHOD = stringPreferencesKey("captcha_solve_method") 
+        private val CAPTCHA_WBV_SOLVE_METHOD = stringPreferencesKey("captcha_wbv_solve_method") 
+        
+        
         private val IS_WHITELIST = booleanPreferencesKey("is_whitelist")
         private val SPLIT_TUNNEL_WHITELIST_MIGRATED = booleanPreferencesKey("split_tunnel_whitelist_migrated")
 
-        // ═══ Theme Mode ═══
-        private val THEME_MODE = stringPreferencesKey("theme_mode") // "system", "light", "dark"
+        
+        private val THEME_MODE = stringPreferencesKey("theme_mode") 
         private val IS_DYNAMIC_COLOR = booleanPreferencesKey("is_dynamic_color")
         private val THEME_PALETTE = stringPreferencesKey("theme_palette")
 
-        // ═══ Fingerprint & Client IDs ═══
+        
         private val SELECTED_FINGERPRINT = stringPreferencesKey("selected_fingerprint")
         private val ACTIVE_CLIENT_IDS = stringPreferencesKey("active_client_ids")
 
@@ -108,9 +109,9 @@ class SettingsStore(context: Context) {
             val newName = "${baseKey.name}_$profile"
             @Suppress("UNCHECKED_CAST")
             return when (baseKey) {
-                PEER, VK_HASHES, SECONDARY_VK_HASH, PROTOCOL, SNI, USER_AGENT, DEPLOY_IP, DEPLOY_LOGIN, DEPLOY_PASSWORD, DEPLOY_PASSWORD_ENCRYPTED, DEPLOY_SSH_PORT, DEPLOY_DNS1, DEPLOY_DNS2, EXCLUDED_APPS, CONNECTION_PASSWORD, CONNECTION_PASSWORD_ENCRYPTED, DEPLOY_MAIN_PASSWORD, DEPLOY_MAIN_PASSWORD_ENCRYPTED, DEPLOY_ADMIN_ID, DEPLOY_ADMIN_ID_ENCRYPTED, DEPLOY_BOT_TOKEN, DEPLOY_BOT_TOKEN_ENCRYPTED, PROXY_MODE, PROXY_HOST, VK_AUTH_MODE, CAPTCHA_MODE, CAPTCHA_SOLVE_METHOD, CAPTCHA_WBV_SOLVE_METHOD, WDTT_LINK, SELECTED_FINGERPRINT, ACTIVE_CLIENT_IDS -> stringPreferencesKey(newName) as Preferences.Key<T>
+                PEER, VK_HASHES, SECONDARY_VK_HASH, PROTOCOL, SNI, USER_AGENT, DEPLOY_IP, DEPLOY_LOGIN, DEPLOY_PASSWORD, DEPLOY_PASSWORD_ENCRYPTED, DEPLOY_SSH_PORT, DEPLOY_DNS1, DEPLOY_DNS2, EXCLUDED_APPS, CONNECTION_PASSWORD, CONNECTION_PASSWORD_ENCRYPTED, DEPLOY_MAIN_PASSWORD, DEPLOY_MAIN_PASSWORD_ENCRYPTED, DEPLOY_ADMIN_ID, DEPLOY_ADMIN_ID_ENCRYPTED, DEPLOY_BOT_TOKEN, DEPLOY_BOT_TOKEN_ENCRYPTED, PROXY_MODE, PROXY_HOST, VK_AUTH_MODE, OBFS_MODE, CAPTCHA_MODE, CAPTCHA_SOLVE_METHOD, CAPTCHA_WBV_SOLVE_METHOD, WDTT_LINK, SELECTED_FINGERPRINT, ACTIVE_CLIENT_IDS -> stringPreferencesKey(newName) as Preferences.Key<T>
                 WORKERS_PER_HASH, LISTEN_PORT, SERVER_DTLS_PORT, SERVER_WG_PORT, PROXY_PORT -> intPreferencesKey(newName) as Preferences.Key<T>
-                MANUAL_PORTS_ENABLED, NO_DTLS, NO_DNS, IS_WHITELIST, WDTT_LINK_MODE -> booleanPreferencesKey(newName) as Preferences.Key<T>
+                MANUAL_PORTS_ENABLED, NO_DTLS, NO_DNS, IS_WHITELIST, WDTT_LINK_MODE, DETAILED_LOGS -> booleanPreferencesKey(newName) as Preferences.Key<T>
                 else -> throw IllegalArgumentException("Unsupported key type: ${baseKey.name}")
             }
         }
@@ -216,9 +217,12 @@ class SettingsStore(context: Context) {
         prefs[getProfileKey(EXCLUDED_APPS, profile)] ?: ""
     }
     
-    val detailedLogs: Flow<Boolean> = dataStore.data.map { it[DETAILED_LOGS] ?: false }
+    val detailedLogs: Flow<Boolean> = dataStore.data.map { prefs ->
+        val profile = prefs[ACTIVE_PROFILE] ?: 0
+        prefs[getProfileKey(DETAILED_LOGS, profile)] ?: false
+    }
     
-    // ═══ Пароли и Управление ═══
+    
     val connectionPassword: Flow<String> = dataStore.data.map { prefs ->
         val profile = prefs[ACTIVE_PROFILE] ?: 0
         readSecret(prefs, CONNECTION_PASSWORD_ENCRYPTED, CONNECTION_PASSWORD, profile)
@@ -236,7 +240,7 @@ class SettingsStore(context: Context) {
         readSecret(prefs, DEPLOY_BOT_TOKEN_ENCRYPTED, DEPLOY_BOT_TOKEN, profile)
     }
 
-    // ═══ Proxy Mode ═══
+    
     val proxyMode: Flow<String> = dataStore.data.map { prefs ->
         val profile = prefs[ACTIVE_PROFILE] ?: 0
         prefs[getProfileKey(PROXY_MODE, profile)] ?: "tun"
@@ -250,11 +254,17 @@ class SettingsStore(context: Context) {
         prefs[getProfileKey(PROXY_PORT, profile)] ?: 1080
     }
 
-    // ═══ Captcha Solve Mode ═══
+    
     val vkAuthMode: Flow<String> = dataStore.data.map { prefs ->
         val profile = prefs[ACTIVE_PROFILE] ?: 0
         prefs[getProfileKey(VK_AUTH_MODE, profile)] ?: "vkcalls"
     }
+    val obfsMode: Flow<String> = dataStore.data.map { prefs ->
+        val profile = prefs[ACTIVE_PROFILE] ?: 0
+        val mode = prefs[getProfileKey(OBFS_MODE, profile)]
+        if (mode.isNullOrBlank()) "audio" else mode
+    }
+    
     val captchaMode: Flow<String> = dataStore.data.map { prefs ->
         val profile = prefs[ACTIVE_PROFILE] ?: 0
         prefs[getProfileKey(CAPTCHA_MODE, profile)] ?: "auto"
@@ -268,25 +278,25 @@ class SettingsStore(context: Context) {
         prefs[getProfileKey(CAPTCHA_WBV_SOLVE_METHOD, profile)] ?: "auto"
     }
 
-    // ═══ VPN Exclusions Mode ═══
+    
     val isWhitelist: Flow<Boolean> = dataStore.data.map { prefs ->
         val profile = prefs[ACTIVE_PROFILE] ?: 0
         prefs[getProfileKey(IS_WHITELIST, profile)] ?: false
     }
 
-    // ═══ Theme Mode ═══
+    
     val themeMode: Flow<String> = dataStore.data.map { it[THEME_MODE] ?: "system" }
     val isDynamicColor: Flow<Boolean> = dataStore.data.map { it[IS_DYNAMIC_COLOR] ?: (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) }
     val themePalette: Flow<String> = dataStore.data.map { it[THEME_PALETTE] ?: "indigo" }
 
-    // ═══ Fingerprint & Client IDs ═══
+    
     val selectedFingerprint: Flow<String> = dataStore.data.map { prefs ->
         val profile = prefs[ACTIVE_PROFILE] ?: 0
-        prefs[getProfileKey(SELECTED_FINGERPRINT, profile)] ?: "chrome"
+        prefs[getProfileKey(SELECTED_FINGERPRINT, profile)] ?: "firefox"
     }
     val activeClientIds: Flow<String> = dataStore.data.map { prefs ->
         val profile = prefs[ACTIVE_PROFILE] ?: 0
-        prefs[getProfileKey(ACTIVE_CLIENT_IDS, profile)] ?: "6287487,8202606"
+        prefs[getProfileKey(ACTIVE_CLIENT_IDS, profile)] ?: "8202606,6287487"
     }
     val clientIdCheckResults: Flow<String> = dataStore.data.map { prefs ->
         prefs[CLIENT_ID_CHECK_RESULTS] ?: "{}"
@@ -483,7 +493,7 @@ class SettingsStore(context: Context) {
         }
     }
     
-    // ═══ Сохранение пароля подключения ═══
+    
     suspend fun saveConnectionPassword(password: String) {
         dataStore.edit { prefs ->
             val profile = prefs[ACTIVE_PROFILE] ?: 0
@@ -491,7 +501,7 @@ class SettingsStore(context: Context) {
         }
     }
     
-    // ═══ Сохранение секретов деплоя ═══
+    
     suspend fun saveDeploySecrets(mainPass: String, adminId: String, botToken: String, sshPort: String) {
         dataStore.edit { prefs ->
             val profile = prefs[ACTIVE_PROFILE] ?: 0
@@ -502,7 +512,7 @@ class SettingsStore(context: Context) {
         }
     }
 
-    // ═══ Сохранение proxy mode ═══
+    
     suspend fun saveProxyMode(mode: String, host: String, port: Int) {
         dataStore.edit { prefs ->
             val profile = prefs[ACTIVE_PROFILE] ?: 0
@@ -512,11 +522,18 @@ class SettingsStore(context: Context) {
         }
     }
 
-    // ═══ Сохранение режима обхода капчи ═══
+    
     suspend fun saveVkAuthMode(mode: String) {
         dataStore.edit { prefs ->
             val profile = prefs[ACTIVE_PROFILE] ?: 0
             prefs[getProfileKey(VK_AUTH_MODE, profile)] = if (mode == "legacy") "legacy" else "vkcalls"
+        }
+    }
+
+    suspend fun saveObfsMode(mode: String) {
+        dataStore.edit { prefs ->
+            val profile = prefs[ACTIVE_PROFILE] ?: 0
+            prefs[getProfileKey(OBFS_MODE, profile)] = mode
         }
     }
 
@@ -544,7 +561,7 @@ class SettingsStore(context: Context) {
         }
     }
 
-    // ═══ Сохранение режима списка (ЧС/БС) ═══
+    
     suspend fun saveIsWhitelist(enabled: Boolean) {
         dataStore.edit { prefs ->
             val profile = prefs[ACTIVE_PROFILE] ?: 0
@@ -553,7 +570,7 @@ class SettingsStore(context: Context) {
         }
     }
 
-    // Атомарное сохранение обоих параметров для исключения гонки при перезагрузке
+    
     suspend fun saveExceptionsMode(packages: String, isWhitelist: Boolean) {
         dataStore.edit { prefs ->
             val profile = prefs[ACTIVE_PROFILE] ?: 0

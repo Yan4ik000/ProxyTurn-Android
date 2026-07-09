@@ -67,7 +67,7 @@ fun ExceptionsTab() {
 
     val isWhitelist by settingsStore.isWhitelist.collectAsStateWithLifecycle(initialValue = false)
 
-    // Load Apps
+    
     LaunchedEffect(Unit) {
         withContext(Dispatchers.IO) {
             settingsStore.migrateLegacyWhitelistMode()
@@ -120,7 +120,7 @@ fun ExceptionsTab() {
     }
 
     Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
-        // Header
+        
         Text(
             "Исключения приложений",
             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
@@ -128,7 +128,7 @@ fun ExceptionsTab() {
             modifier = Modifier.padding(top = 16.dp, bottom = 4.dp)
         )
 
-        // Search Bar
+        
         OutlinedTextField(
             value = searchQuery,
             onValueChange = { searchQuery = it },
@@ -141,7 +141,7 @@ fun ExceptionsTab() {
 
         Spacer(modifier = Modifier.height(14.dp))
 
-        // Mode Toggle
+        
         AppSectionCard(
             modifier = Modifier.padding(bottom = 12.dp),
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
@@ -219,7 +219,7 @@ fun ExceptionsTab() {
             }
         }
 
-        // List
+        
         if (!isMigrationReady || isLoading || showSystemAppsOpt == null) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator()

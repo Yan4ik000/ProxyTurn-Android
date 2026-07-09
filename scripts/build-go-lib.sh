@@ -2,9 +2,9 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-GO_DIR="$ROOT_DIR/go_client"
+GO_DIR="$ROOT_DIR/app/src/main/assets/android-client"
 ABI="${1:-arm64-v8a}"
-API_LEVEL="${ANDROID_NATIVE_API_LEVEL:-21}"
+API_LEVEL="${ANDROID_NATIVE_API_LEVEL:-28}"
 NDK_DIR="${ANDROID_NDK_HOME:-${ANDROID_NDK_ROOT:-}}"
 GO_VERSION="$(go version | awk '{print $3}' | sed 's/^go//')"
 
@@ -26,14 +26,17 @@ needs_checklinkname_flag() {
 case "$ABI" in
   arm64-v8a)
     GOARCH="arm64"
+    GOARM=""
     CLANG_PREFIX="aarch64-linux-android"
     ;;
   armeabi-v7a)
     GOARCH="arm"
+    GOARM="7"
     CLANG_PREFIX="armv7a-linux-androideabi"
     ;;
   x86_64)
     GOARCH="amd64"
+    GOARM=""
     CLANG_PREFIX="x86_64-linux-android"
     ;;
   *)
@@ -42,19 +45,57 @@ case "$ABI" in
     ;;
 esac
 
-if [[ -n "$NDK_DIR" && ! -d "$NDK_DIR/toolchains/llvm/prebuilt/linux-x86_64" ]]; then
+if [[ -n "$NDK_DIR" && ! -d "$NDK_DIR/toolchains/llvm/prebuilt" ]]; then
   NDK_DIR=""
 fi
 
-if [[ -z "$NDK_DIR" && -f "$ROOT_DIR/local.properties" ]]; then
-  SDK_DIR="$(grep -E '^sdk\.dir=' "$ROOT_DIR/local.properties" | head -n1 | cut -d= -f2- || true)"
-  if [[ -n "$SDK_DIR" ]]; then
-    NDK_DIR="$(find "$SDK_DIR/ndk" -maxdepth 1 -mindepth 1 -type d 2>/dev/null | sort -V | tail -n1 || true)"
+SDK_DIR=""
+
+if [[ -z "$NDK_DIR" ]]; then
+  if [[ -n "${ANDROID_HOME:-}" && -d "$ANDROID_HOME" ]]; then
+    SDK_DIR="$ANDROID_HOME"
+  elif [[ -n "${ANDROID_SDK_ROOT:-}" && -d "$ANDROID_SDK_ROOT" ]]; then
+    SDK_DIR="$ANDROID_SDK_ROOT"
+  elif [[ -f "$ROOT_DIR/local.properties" ]]; then
+    SDK_DIR="$(grep -E '^sdk\.dir=' "$ROOT_DIR/local.properties" | head -n1 | cut -d= -f2- || true)"
+    # Android Studio may escape colons in local.properties (C\:/...)
+    SDK_DIR="${SDK_DIR//\\:/:}"
+    if [[ -n "$SDK_DIR" && ! -d "$SDK_DIR" ]]; then
+      SDK_DIR=""
+    fi
   fi
 fi
 
-if [[ -z "$NDK_DIR" && -n "${ANDROID_SDK_ROOT:-}" ]]; then
-  NDK_DIR="$(find "$ANDROID_SDK_ROOT/ndk" -maxdepth 1 -mindepth 1 -type d 2>/dev/null | sort -V | tail -n1 || true)"
+# Fallback to common Android Studio install locations
+if [[ -z "$NDK_DIR" && -z "$SDK_DIR" ]]; then
+  for cand in \
+    "$HOME/AppData/Local/Android/Sdk" \
+    "$HOME/Library/Android/sdk" \
+    "/opt/android-sdk" \
+    "/usr/lib/android-sdk"; do
+    if [[ -d "$cand" ]]; then
+      SDK_DIR="$cand"
+      break
+    fi
+  done
+fi
+
+if [[ -z "$NDK_DIR" && -n "$SDK_DIR" && -d "$SDK_DIR/ndk" ]]; then
+  NDK_DIR="$(find "$SDK_DIR/ndk" -maxdepth 1 -mindepth 1 -type d 2>/dev/null | sort -V | tail -n1 || true)"
+fi
+
+# Fallback to common standalone NDK locations
+if [[ -z "$NDK_DIR" ]]; then
+  for cand in \
+    "$HOME/Downloads/android-ndk-r29" \
+    "$HOME/Downloads/android-ndk-r28" \
+    "$HOME/Downloads/android-ndk-r27" \
+    "/opt/android-ndk"; do
+    if [[ -d "$cand/toolchains/llvm/prebuilt" ]]; then
+      NDK_DIR="$cand"
+      break
+    fi
+  done
 fi
 
 if [[ -z "$NDK_DIR" ]]; then
@@ -63,11 +104,28 @@ if [[ -z "$NDK_DIR" ]]; then
 fi
 
 HOST_TAG="linux-x86_64"
+if [[ "$OSTYPE" == "darwin"* ]]; then
+  HOST_TAG="darwin-x86_64"
+elif [[ "$OSTYPE" == "msys" || "$OSTYPE" == "cygwin" ]]; then
+  HOST_TAG="windows-x86_64"
+fi
+
 CC="$NDK_DIR/toolchains/llvm/prebuilt/$HOST_TAG/bin/${CLANG_PREFIX}${API_LEVEL}-clang"
+if [[ ! -x "$CC" && -x "${CC}.cmd" ]]; then
+  CC="${CC}.cmd"
+fi
 
 if [[ ! -x "$CC" ]]; then
-  echo "Compiler not found: $CC" >&2
-  exit 1
+  CC29="$NDK_DIR/toolchains/llvm/prebuilt/$HOST_TAG/bin/${CLANG_PREFIX}29-clang"
+  CC30="$NDK_DIR/toolchains/llvm/prebuilt/$HOST_TAG/bin/${CLANG_PREFIX}30-clang"
+  if [[ -x "$CC29" ]]; then CC="$CC29";
+  elif [[ -x "${CC29}.cmd" ]]; then CC="${CC29}.cmd";
+  elif [[ -x "$CC30" ]]; then CC="$CC30";
+  elif [[ -x "${CC30}.cmd" ]]; then CC="${CC30}.cmd";
+  else
+    echo "Compiler not found: $CC" >&2
+    exit 1
+  fi
 fi
 
 echo "Refreshing Go checksums"
@@ -83,11 +141,11 @@ echo "Building $ABI -> $OUT_DIR/libclient.so"
 (
   cd "$GO_DIR"
   if needs_checklinkname_flag; then
-    GOOS=android GOARCH="$GOARCH" CGO_ENABLED=1 CC="$CC" \
-      go build -trimpath -ldflags=-checklinkname=0 -o "$OUT_DIR/libclient.so" .
+    GOOS=android GOARCH="$GOARCH" GOARM="$GOARM" CGO_ENABLED=1 CC="$CC" \
+      go build -trimpath -ldflags="-s -w -checklinkname=0" -o "$OUT_DIR/libclient.so" .
   else
-    GOOS=android GOARCH="$GOARCH" CGO_ENABLED=1 CC="$CC" \
-      go build -trimpath -o "$OUT_DIR/libclient.so" .
+    GOOS=android GOARCH="$GOARCH" GOARM="$GOARM" CGO_ENABLED=1 CC="$CC" \
+      go build -trimpath -ldflags="-s -w" -o "$OUT_DIR/libclient.so" .
   fi
 )
 

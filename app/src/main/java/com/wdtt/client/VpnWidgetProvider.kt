@@ -51,7 +51,7 @@ class VpnWidgetProvider : AppWidgetProvider() {
         if (intent.action == ACTION_WIDGET_TOGGLE) {
             runCatching {
                 if (TunnelManager.running.value) {
-                    // Останавливаем туннель
+                    
                     val stopIntent = Intent(context, TunnelService::class.java).apply { action = "STOP" }
                     context.startService(stopIntent)
                     updateAllWidgets(context)
@@ -64,7 +64,7 @@ class VpnWidgetProvider : AppWidgetProvider() {
                     return
                 }
 
-                // Запуск туннеля в фоне
+                
                 scope.launch {
                     try {
                         val startIntent = buildStartIntent(context)
@@ -98,18 +98,18 @@ class VpnWidgetProvider : AppWidgetProvider() {
     ) {
         val views = RemoteViews(context.packageName, R.layout.vpn_widget)
 
-        // Обновляем текст статуса и неоновую иконку кнопки
+        
         if (running) {
             views.setTextViewText(R.id.widget_status, "Подключено")
-            views.setTextColor(R.id.widget_status, 0xFF00E5FF.toInt()) // Неоновый голубой
+            views.setTextColor(R.id.widget_status, 0xFF00E5FF.toInt()) 
             views.setInt(R.id.widget_toggle_btn, "setBackgroundResource", R.drawable.bg_widget_button_active)
         } else {
             views.setTextViewText(R.id.widget_status, "Отключено")
-            views.setTextColor(R.id.widget_status, 0xFF888888.toInt()) // Матовый серый
+            views.setTextColor(R.id.widget_status, 0xFF888888.toInt()) 
             views.setInt(R.id.widget_toggle_btn, "setBackgroundResource", R.drawable.bg_widget_button_inactive)
         }
 
-        // Клик по всей карточке открывает приложение
+        
         val openIntent = Intent(context, MainActivity::class.java).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
@@ -121,7 +121,7 @@ class VpnWidgetProvider : AppWidgetProvider() {
         )
         views.setOnClickPendingIntent(R.id.widget_container, openPendingIntent)
 
-        // Клик по кнопке запускает/останавливает VPN
+        
         val toggleIntent = Intent(context, VpnWidgetProvider::class.java).apply {
             action = ACTION_WIDGET_TOGGLE
         }
@@ -163,6 +163,7 @@ class VpnWidgetProvider : AppWidgetProvider() {
             putExtra("captcha_solve_method", store.captchaSolveMethod.first())
             putExtra("fingerprint", store.selectedFingerprint.first())
             putExtra("client_ids", store.activeClientIds.first())
+            putExtra("obfs_mode", store.obfsMode.first())
         }
     }
 

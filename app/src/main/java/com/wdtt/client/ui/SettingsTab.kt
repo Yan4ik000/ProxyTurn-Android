@@ -48,6 +48,9 @@ import com.wdtt.client.SettingsStore
 import com.wdtt.client.TunnelManager
 import com.wdtt.client.TunnelService
 import com.wdtt.client.WDTTColors
+import com.wdtt.client.ui.dialogs.HashesDialog
+import com.wdtt.client.ui.dialogs.SecretsDialog
+import com.wdtt.client.ui.utils.stripVkUrlStatic
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -90,8 +93,9 @@ fun SettingsTabContent(context: android.content.Context, scope: kotlinx.coroutin
     val wdttLinkMode by settingsStore.wdttLinkMode.collectAsStateWithLifecycle(initialValue = false)
     val wdttLink by settingsStore.wdttLink.collectAsStateWithLifecycle(initialValue = "")
 
-    val activeFingerprint by settingsStore.selectedFingerprint.collectAsStateWithLifecycle(initialValue = "chrome")
-    val activeClientIds by settingsStore.activeClientIds.collectAsStateWithLifecycle(initialValue = "6287487,8202606")
+    val activeFingerprint by settingsStore.selectedFingerprint.collectAsStateWithLifecycle(initialValue = "firefox")
+    val activeClientIds by settingsStore.activeClientIds.collectAsStateWithLifecycle(initialValue = "8202606,6287487")
+    val savedObfsMode by settingsStore.obfsMode.collectAsStateWithLifecycle(initialValue = "audio")
 
     val tunnelRunning by TunnelManager.running.collectAsStateWithLifecycle()
 
@@ -113,6 +117,7 @@ fun SettingsTabContent(context: android.content.Context, scope: kotlinx.coroutin
     var workersInput by rememberSaveable { mutableFloatStateOf(18f) }
     var showHashesDialog by rememberSaveable { mutableStateOf(false) }
     var useVKCallsAuth by rememberSaveable { mutableStateOf(true) }
+    var obfsMode by rememberSaveable { mutableStateOf("audio") }
     var autoCaptchaEnabled by rememberSaveable { mutableStateOf(true) }
     var useWVCaptcha by rememberSaveable { mutableStateOf(false) }
     var isManualMode by rememberSaveable { mutableStateOf(true) }
@@ -201,6 +206,7 @@ fun SettingsTabContent(context: android.content.Context, scope: kotlinx.coroutin
         serverWgPortInput = serverWgPort.toString()
         sniInput = sni
         useVKCallsAuth = vkAuthMode != "legacy"
+        obfsMode = savedObfsMode
         autoCaptchaEnabled = captchaMode == "auto"
         useWVCaptcha = captchaMode != "rjs"
         wbvManualMode = wbvCaptchaMethod != "auto"
@@ -319,6 +325,7 @@ fun SettingsTabContent(context: android.content.Context, scope: kotlinx.coroutin
             putExtra("captcha_solve_method", effectiveCaptchaSolveMethod)
             putExtra("fingerprint", activeFingerprint)
             putExtra("client_ids", activeClientIds)
+            putExtra("obfs_mode", obfsMode)
         }
         if (Build.VERSION.SDK_INT >= 26) context.startForegroundService(intent)
         else context.startService(intent)
@@ -347,7 +354,7 @@ fun SettingsTabContent(context: android.content.Context, scope: kotlinx.coroutin
         }
     }
 
-    // ═══ Dialogs ═══
+    
     if (showSecretsDialog) {
         SecretsDialog(
             settingsStore = settingsStore,
@@ -398,14 +405,14 @@ fun SettingsTabContent(context: android.content.Context, scope: kotlinx.coroutin
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             if (!wdttLinkMode) {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    // ═══ Заголовок раздела ═══
+                    
                     Text(
                         "Настройки туннеля",
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                         color = MaterialTheme.colorScheme.onSurface
                     )
 
-                    // ═══ Настройки туннеля ═══
+                    
                     AppSectionCard(
                         contentPadding = PaddingValues(16.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -459,12 +466,12 @@ fun SettingsTabContent(context: android.content.Context, scope: kotlinx.coroutin
                 }
             }
 
-            // ═══ Мощность + Капча ═══
+            
                 AppSectionCard(
                     contentPadding = PaddingValues(16.dp),
                     verticalArrangement = Arrangement.spacedBy(0.dp)
                 ) {
-                    // — Мощность —
+                    
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -501,13 +508,13 @@ fun SettingsTabContent(context: android.content.Context, scope: kotlinx.coroutin
                         modifier = Modifier.fillMaxWidth()
                     )
 
-                    // — Разделитель —
+                    
                     HorizontalDivider(
                         modifier = Modifier.padding(vertical = 4.dp),
                         color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
                     )
 
-                    // — Режим —
+                    
                     Row(
                         modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -520,13 +527,37 @@ fun SettingsTabContent(context: android.content.Context, scope: kotlinx.coroutin
                             modifier = Modifier.weight(1f)
                         )
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            ProtocolChip("VKCalls", useVKCallsAuth, enabled = !tunnelRunning) {
+                            ProtocolChip("Вызов", useVKCallsAuth, enabled = !tunnelRunning) {
                                 useVKCallsAuth = true
                                 scope.launch { settingsStore.saveVkAuthMode("vkcalls") }
                             }
                             ProtocolChip("Капча", !useVKCallsAuth, enabled = !tunnelRunning) {
                                 useVKCallsAuth = false
                                 scope.launch { settingsStore.saveVkAuthMode("legacy") }
+                            }
+                        }
+                    }
+
+                    
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            "Маскировка",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            ProtocolChip("Аудио", obfsMode == "audio", enabled = !tunnelRunning) {
+                                obfsMode = "audio"
+                                scope.launch { settingsStore.saveObfsMode("audio") }
+                            }
+                            ProtocolChip("Видео", obfsMode == "video", enabled = !tunnelRunning) {
+                                obfsMode = "video"
+                                scope.launch { settingsStore.saveObfsMode("video") }
                             }
                         }
                     }
@@ -542,7 +573,7 @@ fun SettingsTabContent(context: android.content.Context, scope: kotlinx.coroutin
                                 color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
                             )
 
-                            // — Авто капча —
+                            
                             Row(
                                 modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
                                 verticalAlignment = Alignment.CenterVertically,
@@ -579,13 +610,13 @@ fun SettingsTabContent(context: android.content.Context, scope: kotlinx.coroutin
                                 exit = fadeOut() + shrinkVertically()
                             ) {
                                 Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
-                                    // — Разделитель —
+                                    
                                     HorizontalDivider(
                                         modifier = Modifier.padding(vertical = 4.dp),
                                         color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
                                     )
 
-                                    // — Метод обхода капчи —
+                                    
                                     Row(
                                         modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
                                         verticalAlignment = Alignment.CenterVertically,
@@ -617,13 +648,13 @@ fun SettingsTabContent(context: android.content.Context, scope: kotlinx.coroutin
                                         }
                                     }
 
-                                    // — Разделитель —
+                                    
                                     HorizontalDivider(
                                         modifier = Modifier.padding(vertical = 4.dp),
                                         color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
                                     )
 
-                                    // — Режим обхода —
+                                    
                                     Row(
                                         modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
                                         verticalAlignment = Alignment.CenterVertically,
@@ -677,7 +708,7 @@ fun SettingsTabContent(context: android.content.Context, scope: kotlinx.coroutin
                         color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
                     )
 
-                    // — Режим ссылки —
+                    
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -725,7 +756,7 @@ fun SettingsTabContent(context: android.content.Context, scope: kotlinx.coroutin
                 }
             }
 
-        // ═══ Кнопки: Секреты + Подключить ═══
+        
         val tunnelSecretsMissing = savedConnectionPassword.isBlank()
 
         Row(
@@ -757,6 +788,11 @@ fun SettingsTabContent(context: android.content.Context, scope: kotlinx.coroutin
                 animationSpec = tween(400),
                 label = "btn_color"
             )
+            val buttonContentColor by animateColorAsState(
+                targetValue = if (tunnelRunning) MaterialTheme.colorScheme.onError else MaterialTheme.colorScheme.onPrimary,
+                animationSpec = tween(400),
+                label = "btn_content_color"
+            )
 
             Button(
                 onClick = {
@@ -775,7 +811,7 @@ fun SettingsTabContent(context: android.content.Context, scope: kotlinx.coroutin
                 shape = RoundedCornerShape(16.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = buttonColor,
-                    contentColor = MaterialTheme.colorScheme.onPrimary
+                    contentColor = buttonContentColor
                 )
             ) {
                 Icon(
@@ -795,10 +831,18 @@ fun SettingsTabContent(context: android.content.Context, scope: kotlinx.coroutin
                 )
             }
         }
+        
+        Spacer(modifier = Modifier.height(16.dp))
+        Text(
+            text = "Для мобильных сетей.\nЕсли не работает режим \"Вызов\", попробуйте \"Капча\". Если автокапча не работает, попробуйте ручную. Маскировка сильно роли не играет.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            modifier = Modifier.fillMaxWidth()
+        )
     }
 }
 
-// ═══ Reusable mode chip ═══
 @Composable
 private fun ProtocolChip(label: String, selected: Boolean, enabled: Boolean = true, isError: Boolean = false, onClick: () -> Unit) {
     FilterChip(
@@ -808,8 +852,7 @@ private fun ProtocolChip(label: String, selected: Boolean, enabled: Boolean = tr
         label = {
             Text(
                 label,
-                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-                color = if (isError) MaterialTheme.colorScheme.error else (if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface)
+                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
             )
         },
         shape = RoundedCornerShape(16.dp),
@@ -818,13 +861,17 @@ private fun ProtocolChip(label: String, selected: Boolean, enabled: Boolean = tr
             selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
             containerColor = MaterialTheme.colorScheme.surfaceVariant,
             labelColor = MaterialTheme.colorScheme.onSurface,
-            disabledLabelColor = if (isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+            disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.38f),
+            disabledSelectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.38f),
+            disabledLabelColor = if (isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
         ),
         border = FilterChipDefaults.filterChipBorder(
-            enabled = true,
+            enabled = enabled,
             selected = selected,
             borderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f),
-            selectedBorderColor = MaterialTheme.colorScheme.primary
+            selectedBorderColor = MaterialTheme.colorScheme.primary,
+            disabledBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f),
+            disabledSelectedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.38f)
         )
     )
 }
@@ -922,356 +969,17 @@ private fun CompactSteppedSlider(
     }
 }
 
-// ═══ Important Info Dialog ═══
-@Composable
-fun ImportantInfoDialog(onDismiss: () -> Unit) {
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
-    ) {
-        Surface(
-            modifier = Modifier.fillMaxWidth(0.95f).padding(8.dp),
-            shape = RoundedCornerShape(24.dp),
-            color = MaterialTheme.colorScheme.surface,
-            contentColor = MaterialTheme.colorScheme.onSurface,
-            tonalElevation = 6.dp,
-        ) {
-            Column(modifier = Modifier.padding(24.dp).verticalScroll(rememberScrollState())) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("Важная информация", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                    IconButton(onClick = onDismiss) {
-                        Icon(Icons.Default.Close, null)
-                    }
-                }
-
-                Spacer(Modifier.height(16.dp))
-
-                InfoSection("Капча ВК",
-                    "По умолчанию в приложении установлен ручной режим (WBV + РУЧ), но его можно заменить на RJS-АВТ. Это продвинутый автоматический метод решения капчи без всплывающих окон и участия человека, основанный на реверс-инжиниринге JS-кода капчи. Он имитирует действия пользователя в фоновом режиме, обеспечивая бесперебойную работу.\n\nВАЖНО: Если в вашем случае RJS не проходит капчу или выдает ошибки (проблемы со связью или изменения на стороне ВК) — переключитесь обратно в ручной режим."
-                )
-                InfoSection("Как решать капчу",
-                    "Она не сложная: нужно просто потянуть слайдер вправо так, чтобы все элементы (обычно это 3 слова) идеально сошлись в пазле."
-                )
-                InfoSection("Сетевое окружение",
-                    "Отключите другие VPN/Прокси и «Приватный DNS» перед использованием."
-                )
-                InfoSection("Связь потоков и капч",
-                    "Рекомендую выбирать 12-36 потока для меньшего количества капч. Если вам всё равно на частоту ввода капчи в фоне — ставьте 48 и более ради скорости."
-                )
-
-                Spacer(Modifier.height(20.dp))
-                Button(
-                    onClick = onDismiss,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = ButtonDefaults.buttonColors(contentColor = MaterialTheme.colorScheme.onPrimary)
-                ) {
-                    Text("Понятно")
-                }
-            }
-        }
+/**
+ * Округляет значение до ближайшего кратного группы.
+ */
+private fun roundToGroup(value: Float, groupSize: Float): Float {
+    val groups = (value / groupSize).toInt()
+    val remainder = value % groupSize
+    return if (remainder >= groupSize / 2f) {
+        (groups + 1) * groupSize
+    } else {
+        groups * groupSize
     }
 }
 
-@Composable
-private fun InfoSection(title: String, body: String) {
-    Spacer(Modifier.height(12.dp))
-    Text(
-        title,
-        style = MaterialTheme.typography.titleMedium,
-        color = MaterialTheme.colorScheme.primary,
-        fontWeight = FontWeight.Bold
-    )
-    Spacer(Modifier.height(4.dp))
-    Text(body, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
-    Spacer(Modifier.height(4.dp))
-}
 
-// Округление до ближайшего кратного WORKERS_PER_GROUP
-private fun roundToGroup(value: Float, maxW: Float = 96f): Float {
-    val rounded = (Math.round(value / WORKERS_PER_GROUP) * WORKERS_PER_GROUP).toFloat()
-    return rounded.coerceIn(WORKERS_PER_GROUP.toFloat(), maxW)
-}
-
-/** Извлекает хеш из VK ссылки */
-private fun stripVkUrlStatic(input: String): String {
-    var s = input.trim()
-    val lower = s.lowercase()
-    val prefixes = listOf(
-        "https://vk.com/call/join/",
-        "http://vk.com/call/join/",
-        "https://m.vk.com/call/join/",
-        "http://m.vk.com/call/join/",
-        "m.vk.com/call/join/",
-        "vk.com/call/join/"
-    )
-    for (prefix in prefixes) {
-        if (lower.startsWith(prefix)) {
-            s = s.substring(prefix.length)
-            break
-        }
-    }
-    val qIdx = s.indexOf('?')
-    if (qIdx != -1) s = s.substring(0, qIdx)
-    val hIdx = s.indexOf('#')
-    if (hIdx != -1) s = s.substring(0, hIdx)
-    return s.trimEnd('/')
-}
-
-// ═══ Модальное окно хешей ═══
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun HashesDialog(
-    hash1: String,
-    hash2: String,
-    hash3: String,
-    hash4: String,
-    onSave: (String, String, String, String) -> Unit,
-    onDismiss: () -> Unit
-) {
-    var h1 by remember { mutableStateOf(hash1) }
-    var h2 by remember { mutableStateOf(hash2) }
-    var h3 by remember { mutableStateOf(hash3) }
-    var h4 by remember { mutableStateOf(hash4) }
-
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
-    ) {
-        Surface(
-            modifier = Modifier
-                .fillMaxWidth()
-                .fillMaxHeight(0.95f)
-                .imePadding()
-                .padding(horizontal = 16.dp, vertical = 12.dp)
-                .widthIn(max = 560.dp),
-            shape = RoundedCornerShape(24.dp),
-            color = MaterialTheme.colorScheme.surface,
-            contentColor = MaterialTheme.colorScheme.onSurface,
-            tonalElevation = 8.dp
-        ) {
-            Column(
-                modifier = Modifier
-                    .padding(24.dp)
-                    .fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Tag, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(24.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text("VK Хеши", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                    }
-                    IconButton(onClick = onDismiss) {
-                        Icon(Icons.Default.Close, contentDescription = "Закрыть")
-                    }
-                }
-
-                Text(
-                    text = "Больше хешей — выше лимит потоков и лучшее распределение нагрузки.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(bottom = 4.dp)
-                )
-
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f, fill = false)
-                        .verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    listOf(
-                        Triple("VK Хеш 1 *", h1) { v: String -> h1 = v },
-                        Triple("VK Хеш 2", h2) { v: String -> h2 = v },
-                        Triple("VK Хеш 3", h3) { v: String -> h3 = v },
-                        Triple("VK Хеш 4", h4) { v: String -> h4 = v }
-                    ).forEachIndexed { idx, (label, value, onChange) ->
-                        val isShort = value.isNotBlank() && value.length < 16
-                        OutlinedTextField(
-                            value = value,
-                            onValueChange = { raw ->
-                                val cleaned = raw.filter { c -> c != ' ' && c != '\n' }
-                                onChange(stripVkUrlStatic(cleaned))
-                            },
-                            label = { Text(label) },
-                            placeholder = { Text("Ссылка звонка или хеш") },
-                            singleLine = true,
-                            isError = isShort,
-                            supportingText = if (isShort) {
-                                { Text("Хеш ${idx + 1} — короткий (мин. 16)", color = MaterialTheme.colorScheme.error) }
-                            } else null,
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(16.dp),
-                        )
-                    }
-                }
-
-                Button(
-                    onClick = {
-                        onSave(h1, h2, h3, h4)
-                    },
-                    modifier = Modifier.fillMaxWidth().height(48.dp),
-                    shape = RoundedCornerShape(16.dp),
-                    enabled = h1.isNotBlank() && h1.length >= 16,
-                    colors = ButtonDefaults.buttonColors(contentColor = MaterialTheme.colorScheme.onPrimary)
-                ) {
-                    Text("Сохранить", fontWeight = FontWeight.SemiBold)
-                }
-            }
-        }
-    }
-}
-
-// ═══ Модальное окно секретов ═══
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun SecretsDialog(
-    settingsStore: SettingsStore,
-    initialPassword: String,
-    manualPortsEnabled: Boolean,
-    initialServerDtlsPort: String,
-    initialServerWgPort: String,
-    initialLocalPort: String,
-    onSaved: (String, String, String) -> Unit,
-    onDismiss: () -> Unit
-) {
-    val scope = rememberCoroutineScope()
-    var passwordInput by rememberSaveable { mutableStateOf(initialPassword) }
-    var serverDtlsPort by rememberSaveable { mutableStateOf(initialServerDtlsPort.ifBlank { "56000" }) }
-    var serverWgPort by rememberSaveable { mutableStateOf(initialServerWgPort.ifBlank { "56001" }) }
-    var localPort by rememberSaveable { mutableStateOf(initialLocalPort.ifBlank { "9000" }) }
-
-    fun normalizePort(value: String, fallback: String): String {
-        return value.toIntOrNull()?.takeIf { it in 1..65535 }?.toString() ?: fallback
-    }
-
-    Dialog(onDismissRequest = onDismiss) {
-        Surface(
-            shape = RoundedCornerShape(24.dp),
-            color = MaterialTheme.colorScheme.surface,
-            contentColor = MaterialTheme.colorScheme.onSurface,
-            tonalElevation = 8.dp
-        ) {
-            Column(
-                modifier = Modifier.padding(24.dp).fillMaxWidth().verticalScroll(rememberScrollState())
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Default.Key,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(24.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Секреты", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                    }
-                    IconButton(onClick = onDismiss) {
-                        Icon(imageVector = Icons.Default.Close, contentDescription = "Закрыть")
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                val isPasswordValid = passwordInput.isNotEmpty() && passwordInput.matches(Regex("^[a-zA-Z0-9_.!?:#/-]+$"))
-
-                OutlinedTextField(
-                    value = passwordInput,
-                    onValueChange = { passwordInput = it.filter { c -> !c.isWhitespace() } },
-                    label = { Text("Заданный пароль туннеля") },
-                    placeholder = { Text("Придумайте надежный пароль") },
-                    singleLine = true,
-                    isError = passwordInput.isNotEmpty() && !isPasswordValid,
-                    supportingText = if (passwordInput.isNotEmpty() && !isPasswordValid) {
-                        { Text("Разрешены только буквы, цифры и знаки . ! ? : # - _ /", color = MaterialTheme.colorScheme.error) }
-                    } else null,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                )
-
-                if (manualPortsEnabled) {
-                    Spacer(modifier = Modifier.height(16.dp))
-                    HorizontalDivider()
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text("Порты", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    OutlinedTextField(
-                        value = serverDtlsPort,
-                        onValueChange = { serverDtlsPort = it.filter(Char::isDigit).take(5) },
-                        label = { Text("Порт сервера DTLS") },
-                        placeholder = { Text("56000") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(16.dp),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    OutlinedTextField(
-                        value = serverWgPort,
-                        onValueChange = { serverWgPort = it.filter(Char::isDigit).take(5) },
-                        label = { Text("Порт сервера WireGuard") },
-                        placeholder = { Text("56001") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(16.dp),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    OutlinedTextField(
-                        value = localPort,
-                        onValueChange = { localPort = it.filter(Char::isDigit).take(5) },
-                        label = { Text("Локальный порт VPN") },
-                        placeholder = { Text("9000") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(16.dp),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(20.dp))
-
-                Button(
-                    onClick = {
-                        val finalDtls = normalizePort(serverDtlsPort, "56000")
-                        val finalWg = normalizePort(serverWgPort, "56001")
-                        val finalLocal = normalizePort(localPort, "9000")
-                        scope.launch {
-                            settingsStore.saveConnectionPassword(passwordInput)
-                            settingsStore.savePorts(finalDtls.toInt(), finalWg.toInt(), finalLocal.toInt())
-                            onSaved(finalDtls, finalWg, finalLocal)
-                            onDismiss()
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth().height(48.dp),
-                    shape = RoundedCornerShape(16.dp),
-                    enabled = isPasswordValid,
-                    colors = ButtonDefaults.buttonColors(contentColor = MaterialTheme.colorScheme.onPrimary)
-                ) {
-                    Text("Сохранить", fontWeight = FontWeight.SemiBold)
-                }
-            }
-        }
-    }
-}
-
-// extension
-private fun androidx.compose.ui.graphics.Color.luminance(): Float {
-    val r = red
-    val g = green
-    val b = blue
-    return 0.2126f * r + 0.7152f * g + 0.0722f * b
-}

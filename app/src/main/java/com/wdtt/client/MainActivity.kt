@@ -83,7 +83,7 @@ import kotlin.math.sin
 class MainActivity : ComponentActivity() {
 
     private val vpnLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
-        // VPN permission dialog finished
+        
     }
 
     private val batteryLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
@@ -126,8 +126,8 @@ class MainActivity : ComponentActivity() {
             val themeMode by settingsStore.themeMode.collectAsStateWithLifecycle(initialValue = "system")
             val isDynamicColor by settingsStore.isDynamicColor.collectAsStateWithLifecycle(initialValue = false)
             val themePalette by settingsStore.themePalette.collectAsStateWithLifecycle(initialValue = "indigo")
-            val activeFingerprint by settingsStore.selectedFingerprint.collectAsStateWithLifecycle(initialValue = "chrome")
-            val activeClientIds by settingsStore.activeClientIds.collectAsStateWithLifecycle(initialValue = "6287487,8202606")
+            val activeFingerprint by settingsStore.selectedFingerprint.collectAsStateWithLifecycle(initialValue = "firefox")
+            val activeClientIds by settingsStore.activeClientIds.collectAsStateWithLifecycle(initialValue = "8202606,6287487")
             val scope = rememberCoroutineScope()
 
             WDTTTheme(themeMode = themeMode, dynamicColor = isDynamicColor, themePalette = themePalette) {
@@ -200,8 +200,6 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-// ═══ Навигация ═══
-
 private data class NavItem(
     val id: Int,
     val label: String,
@@ -229,7 +227,7 @@ fun MainScreen(
     onPaletteChange: (String) -> Unit = {},
     activeFingerprint: String = "chrome",
     onFingerprintChange: (String) -> Unit = {},
-    activeClientIds: String = "6287487,8202606",
+    activeClientIds: String = "8202606,6287487",
     onClientIdsChange: (String) -> Unit = {}
 ) {
     val unreadErrors by TunnelManager.unreadErrorCount.collectAsStateWithLifecycle()
@@ -260,8 +258,6 @@ fun MainScreen(
     }
     val actionsExpanded = rememberSaveable { mutableStateOf(false) }
     val projectExpanded = rememberSaveable { mutableStateOf(false) }
-
-
 
     LaunchedEffect(wdttLinkMode) {
         if (wdttLinkMode && selectedTab == 1) {
@@ -417,8 +413,9 @@ fun MainScreen(
             }
         }
 
-        // Floating theme toolbar overlay
+        
         FloatingToolbar(
+            settingsStore = settingsStore,
             activeProfile = activeProfile,
             onActiveProfileChange = { profile ->
                 scope.launch { settingsStore.saveActiveProfile(profile) }

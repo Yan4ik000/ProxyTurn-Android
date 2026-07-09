@@ -43,7 +43,7 @@ fun LogsTab() {
     val listState = rememberLazyListState()
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-        // Toolbar
+        
         Row(
             modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -70,7 +70,7 @@ fun LogsTab() {
             }
         }
 
-        // Карточка-выключатель логирования
+        
         AppSectionCard(
             modifier = Modifier.padding(bottom = 12.dp),
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
@@ -102,7 +102,7 @@ fun LogsTab() {
             }
         }
 
-        // Logs container — адаптивный к теме
+        
         val isDark = isSystemInDarkTheme()
         val terminalBg = if (isDark) WDTTColors.terminalBgDark else WDTTColors.terminalBg
 

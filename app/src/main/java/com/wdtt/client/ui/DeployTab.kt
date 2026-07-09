@@ -36,6 +36,8 @@ import com.wdtt.client.DeployManager
 import com.wdtt.client.SettingsStore
 import com.wdtt.client.TunnelManager
 import com.wdtt.client.WDTTColors
+import com.wdtt.client.ui.dialogs.DeploySecretsDialog
+import com.wdtt.client.ui.dialogs.UninstallConfirmDialog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -44,7 +46,7 @@ import java.io.File
 import java.io.FileOutputStream
 import java.util.Properties
 
-private const val CMD_TIMEOUT = 900000L // 15 minutes
+private const val CMD_TIMEOUT = 900000L 
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -117,7 +119,7 @@ fun DeployTab() {
             color = MaterialTheme.colorScheme.onSurface
         )
 
-        // ═══ Поля ввода в Card ═══
+        
         AppSectionCard(
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -237,7 +239,7 @@ fun DeployTab() {
             )
         }
 
-        // ═══ Прогресс ═══
+        
         if (isDeploying) {
             AppSectionCard(
                 contentPadding = PaddingValues(16.dp),
@@ -272,7 +274,7 @@ fun DeployTab() {
             }
         }
 
-        // ═══ Кнопки ═══
+        
         val deploySecretsMissing = savedMainPass.isBlank()
         OutlinedButton(
             onClick = { showSecretsDialog = true },
@@ -386,7 +388,7 @@ fun DeployTab() {
 
         Spacer(modifier = Modifier.weight(1f))
 
-        // ═══ Success Banner ═══
+        
         if (showSuccessBanner) {
             Surface(
                 modifier = Modifier.fillMaxWidth(),
@@ -412,8 +414,6 @@ fun DeployTab() {
         }
     }
 }
-
-// ==================== SSH ====================
 
 private class SSHClient(private val session: Session, private val pass: String) {
 
@@ -564,8 +564,6 @@ private fun isUnsafeLegacyServerAsset(serverFile: File): Boolean {
         (serverFile.containsBinaryToken("wg0") && !serverFile.containsBinaryToken("wdtt0"))
 }
 
-// ==================== Deploy ====================
-
 private suspend fun performDeploy(
     context: Context,
     host: String, user: String, pass: String, port: Int,
@@ -584,8 +582,8 @@ private suspend fun performDeploy(
         val passArg = if (mainPass.isNotBlank()) "-password $mainPass " else ""
         val adminArg = if (adminId.isNotBlank()) "-admin $adminId " else ""
         val botArg = if (botToken.isNotBlank()) "-bot-token $botToken " else ""
-        // -dns поддерживается сервером (server.go, флаг -dns). Передаём только при заданном
-        // значении; несколько адресов — через запятую. Пустые поля -> сервер берёт свой default.
+        
+        
         val dnsValue = listOf(dns1, dns2).map { it.trim() }.filter { it.isNotEmpty() }.joinToString(",")
         val dnsArg = if (dnsValue.isNotEmpty()) "-dns $dnsValue " else ""
         val args = "$passArg$adminArg$botArg$dnsArg".trim()
@@ -643,9 +641,6 @@ private suspend fun performDeploy(
         DeployManager.activeSession = null
     }
 }
-
-
-// ==================== Uninstall ====================
 
 private suspend fun performUninstall(
     host: String, user: String, pass: String, port: Int,
@@ -728,234 +723,3 @@ private suspend fun performUninstall(
     }
 }
 
-// ==================== Dialogs ====================
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun DeploySecretsDialog(
-    settingsStore: SettingsStore,
-    initialMainPass: String,
-    initialAdminId: String,
-    initialBotToken: String,
-    initialSshPort: String,
-    manualPortsEnabled: Boolean,
-    initialServerDtlsPort: String,
-    initialServerWgPort: String,
-    onSaved: (String, String) -> Unit,
-    onDismiss: () -> Unit
-) {
-    val scope = rememberCoroutineScope()
-    var passInput by rememberSaveable { mutableStateOf(initialMainPass) }
-    var adminIdInput by rememberSaveable { mutableStateOf(initialAdminId) }
-    var botTokenInput by rememberSaveable { mutableStateOf(initialBotToken) }
-    var sshPortInput by rememberSaveable { mutableStateOf(if (initialSshPort.isBlank()) "22" else initialSshPort) }
-    var dtlsPortInput by rememberSaveable { mutableStateOf(initialServerDtlsPort.ifBlank { "56000" }) }
-    var wgPortInput by rememberSaveable { mutableStateOf(initialServerWgPort.ifBlank { "56001" }) }
-
-    fun normalizePort(value: String, fallback: String): String {
-        return value.toIntOrNull()?.takeIf { it in 1..65535 }?.toString() ?: fallback
-    }
-
-    androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
-        Surface(
-            shape = RoundedCornerShape(24.dp),
-            color = MaterialTheme.colorScheme.surface,
-            contentColor = MaterialTheme.colorScheme.onSurface,
-            tonalElevation = 8.dp
-        ) {
-            Column(modifier = Modifier.padding(24.dp).fillMaxWidth().verticalScroll(rememberScrollState())) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("Секреты Деплоя", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                    IconButton(onClick = onDismiss) {
-                        Icon(Icons.Default.Close, contentDescription = "Закрыть")
-                    }
-                }
-
-                Spacer(Modifier.height(16.dp))
-
-                val isPasswordValid = passInput.isNotEmpty() && passInput.matches(Regex("^[a-zA-Z0-9_.!?:#/-]+$"))
-
-                OutlinedTextField(
-                    value = passInput,
-                    onValueChange = { passInput = it.filter { c -> !c.isWhitespace() } },
-                    label = { Text("Задайте пароль туннеля (любой)") },
-                    placeholder = { Text("Придумайте надежный пароль") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    isError = passInput.isNotEmpty() && !isPasswordValid,
-                    supportingText = if (passInput.isNotEmpty() && !isPasswordValid) {
-                        { Text("Разрешены только буквы, цифры и симв: _ . ! ? : # - /", color = MaterialTheme.colorScheme.error) }
-                    } else null
-                )
-
-                Spacer(Modifier.height(16.dp))
-                HorizontalDivider()
-                Spacer(Modifier.height(8.dp))
-                Text("Телеграм бот для управления", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
-                Spacer(Modifier.height(8.dp))
-
-                OutlinedTextField(
-                    value = adminIdInput,
-                    onValueChange = { adminIdInput = it },
-                    label = { Text("ID Админа (Опционально)") },
-                    placeholder = { Text("ID из @getmyid_bot") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
-                        keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
-                    )
-                )
-
-                Spacer(Modifier.height(8.dp))
-
-                OutlinedTextField(
-                    value = botTokenInput,
-                    onValueChange = { botTokenInput = it },
-                    label = { Text("Токен Бота (Опционально)") },
-                    placeholder = { Text("Токен от BotFather") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp)
-                )
-
-                Spacer(Modifier.height(16.dp))
-                HorizontalDivider()
-                Spacer(Modifier.height(8.dp))
-                Text("SSH Порт", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
-                Spacer(Modifier.height(8.dp))
-
-                OutlinedTextField(
-                    value = sshPortInput,
-                    onValueChange = { sshPortInput = it.filter(Char::isDigit).take(5) },
-                    label = { Text("Порт для деплоя SSH") },
-                    placeholder = { Text("22") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
-                        keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
-                    )
-                )
-
-                if (manualPortsEnabled) {
-                    Spacer(Modifier.height(16.dp))
-                    HorizontalDivider()
-                    Spacer(Modifier.height(8.dp))
-                    Text("Порты сервера", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
-                    Spacer(Modifier.height(8.dp))
-                    OutlinedTextField(
-                        value = dtlsPortInput,
-                        onValueChange = { dtlsPortInput = it.filter(Char::isDigit).take(5) },
-                        label = { Text("Порт DTLS сервера") },
-                        placeholder = { Text("56000") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(16.dp),
-                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
-                            keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
-                        )
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    OutlinedTextField(
-                        value = wgPortInput,
-                        onValueChange = { wgPortInput = it.filter(Char::isDigit).take(5) },
-                        label = { Text("Порт WireGuard сервера") },
-                        placeholder = { Text("56001") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(16.dp),
-                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
-                            keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
-                        )
-                    )
-                }
-
-                Spacer(Modifier.height(24.dp))
-                Button(
-                    onClick = {
-                        val finalPort = if (sshPortInput.isBlank()) "22" else sshPortInput
-                        val finalDtls = normalizePort(dtlsPortInput, "56000")
-                        val finalWg = normalizePort(wgPortInput, "56001")
-                        scope.launch {
-                            settingsStore.saveDeploySecrets(passInput, adminIdInput, botTokenInput, finalPort)
-                            settingsStore.savePorts(finalDtls.toInt(), finalWg.toInt(), settingsStore.listenPort.first())
-                            onSaved(finalDtls, finalWg)
-                            onDismiss()
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth().height(48.dp),
-                    shape = RoundedCornerShape(16.dp),
-                    enabled = isPasswordValid,
-                    colors = ButtonDefaults.buttonColors(contentColor = MaterialTheme.colorScheme.onPrimary)
-                ) { Text("Сохранить", fontWeight = FontWeight.SemiBold) }
-            }
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun UninstallConfirmDialog(onDismiss: () -> Unit, onConfirm: () -> Unit) {
-    var confirmText by remember { mutableStateOf("") }
-    val isConfirmed = confirmText.trim().lowercase() == "да"
-
-    androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
-        Surface(
-            shape = RoundedCornerShape(24.dp),
-            color = MaterialTheme.colorScheme.surface,
-            contentColor = MaterialTheme.colorScheme.onSurface,
-            tonalElevation = 8.dp
-        ) {
-            Column(modifier = Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                Text(
-                    "Удаление WDTT с сервера",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.error
-                )
-                Text(
-                    "Будут удалены: бинарник, systemd-сервис, бот, конфигурация WDTT и только помеченные правила firewall/NAT для WDTT.\n\nЭто действие необратимо.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                OutlinedTextField(
-                    value = confirmText,
-                    onValueChange = { confirmText = it },
-                    label = { Text("Введите «да» для подтверждения") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = MaterialTheme.colorScheme.error,
-                        unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
-                    )
-                )
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    OutlinedButton(
-                        onClick = onDismiss, modifier = Modifier.weight(1f).height(48.dp),
-                        shape = RoundedCornerShape(16.dp),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurface)
-                    ) { Text("Отмена") }
-                    Button(
-                        onClick = onConfirm, modifier = Modifier.weight(1f).height(48.dp),
-                        shape = RoundedCornerShape(16.dp), enabled = isConfirmed,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.error,
-                            contentColor = MaterialTheme.colorScheme.onError
-                        )
-                    ) {
-                        Icon(Icons.Default.Delete, null, Modifier.size(18.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text("Удалить", fontWeight = FontWeight.Bold)
-                    }
-                }
-            }
-        }
-    }
-}

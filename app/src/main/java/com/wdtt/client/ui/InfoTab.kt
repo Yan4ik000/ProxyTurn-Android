@@ -1,5 +1,6 @@
 package com.wdtt.client.ui
 
+import com.wdtt.client.ui.dialogs.ImportantInfoDialog
 import androidx.compose.runtime.MutableState
 
 import android.content.ClipData
@@ -210,7 +211,7 @@ fun InfoTab(
 
         ExpandableSectionCard(
             title = "Действия",
-            itemCount = "4 пункта",
+            itemCount = "3 пункта",
             expanded = actionsExpanded,
             onToggle = { actionsExpanded = !actionsExpanded },
             icon = {
@@ -260,20 +261,6 @@ fun InfoTab(
                     }
                 )
             }
-
-            WideActionTile(
-                title = "Справка",
-                subtitle = "Коротко про VPN, исключения, капчу и запуск",
-                onClick = { showHelpDialog = true },
-                icon = {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.HelpOutline,
-                        contentDescription = null,
-                        modifier = Modifier.size(20.dp),
-                        tint = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                }
-            )
 
             WideActionTile(
                 title = "Проверить обновления",
@@ -442,7 +429,7 @@ private fun InfoHeroCard(currentVersion: String, onSupportClick: () -> Unit) {
         shape = RoundedCornerShape(32.dp),
         color = Color.Transparent,
         contentColor = MaterialTheme.colorScheme.onSurface,
-        shadowElevation = 10.dp,
+        shadowElevation = 0.dp,
         tonalElevation = 0.dp
     ) {
         Box(
@@ -494,19 +481,15 @@ private fun InfoHeroCard(currentVersion: String, onSupportClick: () -> Unit) {
 
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
-                        text = "WDTT VPN Tunnel",
-                        style = MaterialTheme.typography.headlineSmall.copy(
+                        text = "WIREGUARD DTLS TURN TUNNEL",
+                        style = MaterialTheme.typography.titleMedium.copy(
                             fontWeight = FontWeight.Black,
-                            fontSize = 30.sp,
-                            lineHeight = 34.sp
+                            fontSize = 18.sp,
+                            lineHeight = 22.sp
                         ),
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                         color = colors.onSurface
-                    )
-                    Text(
-                        text = "Android-клиент для TURN/VK туннеля с WireGuard, капчей и управлением сервером.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = colors.onSurfaceVariant,
-                        lineHeight = 21.sp
                     )
                 }
 

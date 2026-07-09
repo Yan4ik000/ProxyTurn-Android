@@ -16,7 +16,7 @@ object DeployManager {
     val isDeploying = MutableStateFlow(false)
     val deployProgress = MutableStateFlow(0f)
     val currentStep = MutableStateFlow("")
-    val lastResult = MutableStateFlow("") // "success", "error: ...", ""
+    val lastResult = MutableStateFlow("") 
 
     @Volatile
     var activeSession: com.jcraft.jsch.Session? = null
@@ -24,7 +24,7 @@ object DeployManager {
     private var errorsFile: File? = null
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
 
-    /** Вызвать один раз при старте приложения */
+    
     fun init(context: Context) {
         val dir = context.getExternalFilesDir(null) ?: context.filesDir
         errorsFile = File(dir, "errors.log")
@@ -32,14 +32,14 @@ object DeployManager {
 
     fun getErrorsFile(): File? = errorsFile
 
-    /** Записать ошибку в файл (потокобезопасно) */
+    
     @Synchronized
     fun writeError(msg: String) {
         val file = errorsFile ?: return
         try {
             val timestamp = dateFormat.format(Date())
             file.appendText("[$timestamp] $msg\n")
-            // Ротация: если файл > 500 КБ, обрезаем до последних 200 КБ
+            
             if (file.length() > 500_000) {
                 val text = file.readText()
                 file.writeText(text.takeLast(200_000))
@@ -48,7 +48,7 @@ object DeployManager {
     }
 
     fun startDeploy() {
-        // Автосброс зависшего деплоя > 30 минут
+        
         if (isDeploying.value && deployStartTime > 0 &&
             System.currentTimeMillis() - deployStartTime > 30 * 60 * 1000) {
             writeError("Автосброс: предыдущий деплой завис >30 мин")
@@ -70,7 +70,7 @@ object DeployManager {
         try { session?.disconnect() } catch (_: Exception) {}
     }
 
-    /** Принудительный сброс — для восстановления из любого состояния */
+    
     fun forceReset() {
         val session = activeSession
         activeSession = null

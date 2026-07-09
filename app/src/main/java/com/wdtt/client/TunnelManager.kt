@@ -21,12 +21,12 @@ data class LogEntry(
     val key: String,
     val message: String,
     val count: Int = 1,
-    val priority: Int = 99, // 0 - Creds, 1 - DTLS, 2 - Ready, 3 - Stats, 99 - Errors/Other
+    val priority: Int = 99, 
     val isError: Boolean = false
 )
 
 object TunnelManager {
-    // 100% защита от утечек: единый управляемый глобальный Scope
+    
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     private var process: Process? = null
@@ -36,7 +36,7 @@ object TunnelManager {
     
     private val startStopMutex = kotlinx.coroutines.sync.Mutex()
 
-    // Error counters for circuit breaker
+    
     private var floodCount = 0
     private var mismatchCount = 0
     private var refusedCount = 0
@@ -44,12 +44,12 @@ object TunnelManager {
     private var wrapAuthTimeoutCount = 0
     var processStartedAtMs = 0L
     private var lastActiveAtMs = 0L
-    private var activeHashIndex = 0 // 0: primary, 1: secondary
+    private var activeHashIndex = 0 
     private var currentParams: TunnelParams? = null
     private var lastContext: Context? = null
-    private var forceRegenerateUA = false // принудительная перегенерация UA при ошибках
-    private var currentCaptchaMode = "wv" // режим обхода капчи: "wv" или "rjs"
-    private var currentCaptchaSolveMethod = "auto" // "manual" или "auto"
+    private var forceRegenerateUA = false 
+    private var currentCaptchaMode = "wv" 
+    private var currentCaptchaSolveMethod = "auto" 
 
     @Volatile
     var isLoggingEnabled = true
@@ -66,6 +66,54 @@ object TunnelManager {
 
     fun clearUnreadErrors() {
         unreadErrorCount.value = 0
+    }
+
+    
+
+    private fun handleTunnelEvent(event: TunnelEventParser.Event, now: Long): Boolean {
+        when (event) {
+            is TunnelEventParser.Event.Stats -> {
+                activeWorkers.value = event.active
+                if (event.active > 0) {
+                    lastActiveAtMs = now
+                    wrapAuthTimeoutCount = 0
+                }
+                val totalMB = (event.bytesUp + event.bytesDown) / (1024.0 * 1024.0)
+                val msg = "Активных: ${event.active} | Трафик: %.2f МБ".format(totalMB)
+                stats.value = msg
+                updateLog("stats", "[СТАТИСТИКА] $msg", 3, false)
+            }
+            is TunnelEventParser.Event.Ready -> {
+                updateLog("ready", "[READY] Туннель готов к работе ✓", 2, false)
+            }
+            is TunnelEventParser.Event.Config -> {
+                val configStr = event.config.trim()
+                if (configStr.isNotEmpty()) {
+                    config.value = configStr
+                    scope.launch(Dispatchers.Main) {
+                        try {
+                            wgHelper?.startTunnel(configStr)
+                        } catch (e: Exception) {
+                            updateLog("vpn_start_error", "Ошибка запуска VPN: ${e.readableMessage()}", 99, true)
+                        }
+                    }
+                }
+            }
+            is TunnelEventParser.Event.Error -> {
+                if (event.fatal) {
+                    handleCriticalError(event.message)
+                } else {
+                    updateLog("event_error_${event.code}", event.message, 99, true)
+                }
+            }
+            is TunnelEventParser.Event.CaptchaRequest -> {
+                scope.launch {
+                    handleCaptchaSolve(event.mode, event.redirectUri, event.sessionToken)
+                }
+            }
+            else -> return false
+        }
+        return true
     }
 
     private var observersInitialized = false
@@ -85,13 +133,13 @@ object TunnelManager {
                         )
                     }
                 } catch (e: Exception) {
-                    // Ignore
+                    
                 }
             }
         }
     }
 
-    // Добавляем лог с Деплоя
+    
     fun addDeployErrorLog(message: String) {
         val hash = message.hashCode().toString()
         updateLog("deploy_err_$hash", "[ДЕПЛОЙ] $message", 99, true)
@@ -115,19 +163,19 @@ object TunnelManager {
             val index = current.indexOfFirst { it.key == key }
 
             if (index != -1) {
-                // Обновляем текст и счётчик НА МЕСТЕ
+                
                 val entry = current[index]
                 current[index] = entry.copy(count = entry.count + 1, message = message, priority = priority, isError = isError)
             } else {
-                // Новая запись
+                
                 current.add(LogEntry(key, message, 1, priority, isError))
             }
 
-            // Сортировка: по приоритету (наименьший сверху), затем ошибки
-            // Приоритеты: Основной=1, Капча=5, Готов=10, Статы=100, Ошибки=200
+            
+            
             val sorted = current.sortedWith(compareBy({ it.priority }, { if (it.isError) 1 else 0 }, { it.key }))
 
-            // Лимит 100 записей
+            
             if (sorted.size > 100) sorted.takeLast(100) else sorted
         }
     }
@@ -138,7 +186,7 @@ object TunnelManager {
             try {
                 if (running.value && !isSwitching) return@launch
         
-                val appContext = context.applicationContext // Защита от Memory Leak
+                val appContext = context.applicationContext 
                 
                 if (!isSwitching) {
                     clearLogs()
@@ -163,7 +211,7 @@ object TunnelManager {
 
                 val targetHash = if (activeHashIndex == 0) params.vkHashes else params.secondaryVkHash
                 
-                // Robust hash parsing: split by comma, newline, or whitespace
+                
                 val hashList = targetHash
                     .split(Regex("[,\\s\\n]+"))
                     .map { it.trim() }
@@ -212,6 +260,8 @@ object TunnelManager {
                     cmd.add("-client-ids")
                     cmd.add(params.clientIds)
                 }
+                cmd.add("-obfs")
+                cmd.add(params.obfsMode)
                 cmd.add("-vk-auth-mode")
                 cmd.add(params.vkAuthMode)
 
@@ -231,6 +281,9 @@ object TunnelManager {
                 
                 val env = pb.environment()
                 env["LD_LIBRARY_PATH"] = context.applicationInfo.nativeLibraryDir
+                
+                
+                env["WDTT_EVENTS"] = "1"
 
                 process = pb.start()
                 processStartedAtMs = System.currentTimeMillis()
@@ -271,6 +324,12 @@ object TunnelManager {
 
                     val msgPrefixReplaced = line.replace(Regex("^\\d{4}/\\d{2}/\\d{2}\\s\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?\\s"), "")
                     val lineTrim = msgPrefixReplaced.trim()
+
+                    
+                    val event = TunnelEventParser.parse(lineTrim)
+                    if (event != null && handleTunnelEvent(event, now)) {
+                        return@forEachLine
+                    }
 
                     val isError = lineTrim.contains("Ошибка", true) || lineTrim.contains("error", true) || lineTrim.contains("FAIL", true) || lineTrim.contains("timeout", true) || lineTrim.contains("refused", true) || lineTrim.contains("FATAL_AUTH", true)
 
@@ -834,6 +893,7 @@ data class TunnelParams(
     val vkAuthMode: String = "vkcalls",
     val captchaMode: String = "auto",
     val captchaSolveMethod: String = "auto",
-    val fingerprint: String = "chrome",
-    val clientIds: String = "6287487,8202606"
+    val fingerprint: String = "firefox",
+    val clientIds: String = "8202606,6287487",
+    val obfsMode: String = "audio"
 )
