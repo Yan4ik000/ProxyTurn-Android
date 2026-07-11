@@ -90,6 +90,14 @@ func obfsBuildNonceInto(dst *[12]byte, ssrc uint32, seq uint16, ts uint32) {
 	binary.BigEndian.PutUint32(dst[8:12], ts)
 }
 
+func obfsBuildNonce(ssrc uint32, seq uint16, ts uint32) []byte {
+	n := make([]byte, 12)
+	var tmp [12]byte
+	obfsBuildNonceInto(&tmp, ssrc, seq, ts)
+	copy(n, tmp[:])
+	return n
+}
+
 func obfsWrapWireLen(payloadLen int, cfg *ObfsConfig) int {
 	pad := cfg.PaddingMax
 	if pad < 1 {
