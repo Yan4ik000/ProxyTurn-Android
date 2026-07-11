@@ -87,8 +87,6 @@ func statsLoop(ctx context.Context, configDir string) {
 			total := atomic.LoadInt64(&totalConns)
 			uptime := time.Since(serverStartTime)
 
-			// log.Printf убран чтобы не засорять логи  дублирующейся информацией
-
 			dbMutex.Lock()
 			numPasswords := len(db.Passwords)
 			numDevices := len(db.Devices)
@@ -97,6 +95,9 @@ func statsLoop(ctx context.Context, configDir string) {
 			uptimeStr := formatUptime(uptime)
 			downGB := float64(toC) / (1024 * 1024 * 1024)
 			upGB := float64(fromC) / (1024 * 1024 * 1024)
+
+			log.Printf("[СТАТ] Активных: %d | Всего соединений: %d | Uptime: %s | Получено: %.2f GB | Отправлено: %.2f GB | Паролей: %d | Устройств: %d",
+				active, total, uptimeStr, downGB, upGB, numPasswords, numDevices)
 
 			statsJSON, _ := json.Marshal(map[string]interface{}{
 				"active":    active,
@@ -391,7 +392,7 @@ PersistentKeepalive = %d`,
 }
 
 func handleConn(ctx context.Context, clientConn net.Conn, wgEndpoint string, wgDev *device.Device, keys *wgKeys) {
-	// 1. предотвсращаем утечку тута
+	// Добавлен defer для предотвращения утечки сокетов при ошибках на любом этапе функции
 	defer clientConn.Close()
 
 	atomic.AddInt64(&totalConns, 1)
@@ -401,13 +402,13 @@ func handleConn(ctx context.Context, clientConn net.Conn, wgEndpoint string, wgD
 
 	dtlsConn, ok := clientConn.(*dtls.Conn)
 	if !ok {
-		return // Ранее сокет оставался открытым, теперь закроется благодаря defer
+		return 
 	}
 
 	hctx, hcancel := context.WithTimeout(ctx, 30*time.Second)
 	if err := dtlsConn.HandshakeContext(hctx); err != nil {
 		hcancel()
-		return // Ранее сокет оставался открытым, теперь закроется благодаря defer
+		return 
 	}
 	hcancel()
 
@@ -675,4 +676,9 @@ func handleConn(ctx context.Context, clientConn net.Conn, wgEndpoint string, wgD
 	}()
 
 	proxyWg.Wait()
+
+	// Добавлен финальный сброс статистики после завершения работы всех прокси-горутин
+	if connPassword != "" && !connIsMainPass {
+		flushStats()
+	}
 }
