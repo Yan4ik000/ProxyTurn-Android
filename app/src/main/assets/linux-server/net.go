@@ -1,5 +1,3 @@
-
-
 package main
 
 import (
@@ -71,11 +69,11 @@ var (
 func statsLoop(ctx context.Context, configDir string) {
 	serverStartTime = time.Now()
 	statsFile := filepath.Join(configDir, "server.log")
-	
-	// интервал с 10 секунд на 1 минуту, чтобы снизить нагрузку на диск и процессор 
+
+	// интервал с 10 секунд на 1 минуту, чтобы снизить нагрузку на диск и процессор
 	ticker := time.NewTicker(1 * time.Minute)
 	defer ticker.Stop()
-	
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -402,13 +400,13 @@ func handleConn(ctx context.Context, clientConn net.Conn, wgEndpoint string, wgD
 
 	dtlsConn, ok := clientConn.(*dtls.Conn)
 	if !ok {
-		return 
+		return
 	}
 
 	hctx, hcancel := context.WithTimeout(ctx, 30*time.Second)
 	if err := dtlsConn.HandshakeContext(hctx); err != nil {
 		hcancel()
-		return 
+		return
 	}
 	hcancel()
 
@@ -461,7 +459,7 @@ func handleConn(ctx context.Context, clientConn net.Conn, wgEndpoint string, wgD
 
 			if isGenPass && entry.DeviceID == "" {
 				entry.DeviceID = deviceID
-				saveDB()
+				saveDBLazy()
 				log.Printf("[WG] Пароль %s привязан к устройству %s", maskPassword(password), deviceID)
 			}
 
@@ -473,7 +471,7 @@ func handleConn(ctx context.Context, clientConn net.Conn, wgEndpoint string, wgD
 					dev.PrivKey = privB64
 					dev.PubKey = pubB64
 					db.Devices[deviceID] = dev
-					saveDB()
+					saveDBLazy()
 					log.Printf("[WG] Новое устройство %s (IP: %s)", deviceID, dev.IP)
 				} else {
 					dev = nil
@@ -587,50 +585,73 @@ func handleConn(ctx context.Context, clientConn net.Conn, wgEndpoint string, wgD
 		}()
 	}
 
-// Направление: Клиент -> WireGuard (Upload)
+	// Направление: Клиент -> WireGuard (Upload)
 	go func() {
 		defer proxyWg.Done()
 		defer pcancel()
 		b := getBuf()
 		defer putBuf(b)
-		
+
 		var lastDeadlineUpdate time.Time
+		var localFromClient int64
+		var localPassUp int64
+
+		// Гарантированный сброс накопленных данных при выходе из горутины
+		defer func() {
+			if localFromClient > 0 {
+				atomic.AddInt64(&totalBytesFromClient, localFromClient)
+			}
+			if localPassUp > 0 {
+				atomic.AddInt64(&localUpBytes, localPassUp)
+			}
+		}()
+
+		tick := time.NewTicker(5 * time.Second)
+		defer tick.Stop()
 
 		for {
 			select {
 			case <-pctx.Done():
 				return
+			case <-tick.C:
+				if localFromClient > 0 {
+					atomic.AddInt64(&totalBytesFromClient, localFromClient)
+					localFromClient = 0
+				}
+				if localPassUp > 0 {
+					atomic.AddInt64(&localUpBytes, localPassUp)
+					localPassUp = 0
+				}
 			default:
-			}
-			
-			// Вызываем дедлайн только раз в 15 секунд, а не на каждый пакет
-			now := time.Now()
-			if now.Sub(lastDeadlineUpdate) > 15*time.Second {
-				clientConn.SetReadDeadline(now.Add(30 * time.Minute))
-				lastDeadlineUpdate = now
-			}
+				// Вызываем дедлайн только раз в 15 секунд, а не на каждый пакет
+				now := time.Now()
+				if now.Sub(lastDeadlineUpdate) > 15*time.Second {
+					clientConn.SetReadDeadline(now.Add(30 * time.Minute))
+					lastDeadlineUpdate = now
+				}
 
-			nn, err := clientConn.Read(*b)
-			if err != nil {
-				return
-			}
-			
-			if nn == 1 && (*b)[0] == 0xFF {
-				continue
-			}
-			atomic.AddInt64(&totalBytesFromClient, int64(nn))
-			
-			if connPassword != "" && !connIsMainPass {
-				atomic.AddInt64(&localUpBytes, int64(nn))
-			}
+				nn, err := clientConn.Read(*b)
+				if err != nil {
+					return
+				}
 
-			if _, err := wgConn.Write((*b)[:nn]); err != nil {
-				return
+				if nn == 1 && (*b)[0] == 0xFF {
+					continue
+				}
+
+				localFromClient += int64(nn)
+				if connPassword != "" && !connIsMainPass {
+					localPassUp += int64(nn)
+				}
+
+				if _, err := wgConn.Write((*b)[:nn]); err != nil {
+					return
+				}
 			}
 		}
 	}()
 
-// Направление: WireGuard -> Клиент (Download)
+	// Направление: WireGuard -> Клиент (Download)
 	go func() {
 		defer proxyWg.Done()
 		defer pcancel()
@@ -638,39 +659,62 @@ func handleConn(ctx context.Context, clientConn net.Conn, wgEndpoint string, wgD
 		defer putBuf(b)
 
 		var lastDeadlineUpdate time.Time
+		var localToClient int64
+		var localPassDown int64
+
+		// Гарантированный сброс накопленных данных при выходе из горутины
+		defer func() {
+			if localToClient > 0 {
+				atomic.AddInt64(&totalBytesToClient, localToClient)
+			}
+			if localPassDown > 0 {
+				atomic.AddInt64(&localDownBytes, localPassDown)
+			}
+		}()
+
+		tick := time.NewTicker(5 * time.Second)
+		defer tick.Stop()
 
 		for {
 			select {
 			case <-pctx.Done():
 				return
-			default:
-			}
-
-			// Вызываем дедлайн только раз в 15 секунд
-			now := time.Now()
-			if now.Sub(lastDeadlineUpdate) > 15*time.Second {
-				wgConn.SetReadDeadline(now.Add(30 * time.Minute))
-				lastDeadlineUpdate = now
-			}
-
-			nn, err := wgConn.Read(*b)
-			if err != nil {
-				if isNetTimeout(err) {
-					if pctx.Err() != nil {
-						return
-					}
-					continue
+			case <-tick.C:
+				if localToClient > 0 {
+					atomic.AddInt64(&totalBytesToClient, localToClient)
+					localToClient = 0
 				}
-				return
-			}
-			atomic.AddInt64(&totalBytesToClient, int64(nn))
-			
-			if connPassword != "" && !connIsMainPass {
-				atomic.AddInt64(&localDownBytes, int64(nn))
-			}
+				if localPassDown > 0 {
+					atomic.AddInt64(&localDownBytes, localPassDown)
+					localPassDown = 0
+				}
+			default:
+				// Вызываем дедлайн только раз в 15 секунд
+				now := time.Now()
+				if now.Sub(lastDeadlineUpdate) > 15*time.Second {
+					wgConn.SetReadDeadline(now.Add(30 * time.Minute))
+					lastDeadlineUpdate = now
+				}
 
-			if _, err := clientConn.Write((*b)[:nn]); err != nil {
-				return
+				nn, err := wgConn.Read(*b)
+				if err != nil {
+					if isNetTimeout(err) {
+						if pctx.Err() != nil {
+							return
+						}
+						continue
+					}
+					return
+				}
+
+				localToClient += int64(nn)
+				if connPassword != "" && !connIsMainPass {
+					localPassDown += int64(nn)
+				}
+
+				if _, err := clientConn.Write((*b)[:nn]); err != nil {
+					return
+				}
 			}
 		}
 	}()
