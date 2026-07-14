@@ -108,7 +108,7 @@ class QuickToggleTileService : TileService() {
                 putExtra("peer", peerWithPort)
                 putExtra("vk_hashes", hashes)
                 putExtra("secondary_vk_hash", store.secondaryVkHash.first())
-                putExtra("workers_per_hash", store.workersPerHash.first())
+                putExtra("total_workers", store.totalWorkers.first())
                 putExtra("port", localPort)
                 putExtra("sni", store.sni.first())
                 putExtra("connection_password", store.connectionPassword.first())

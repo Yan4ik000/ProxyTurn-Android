@@ -186,7 +186,7 @@ fun SettingsTabContent(context: android.content.Context, scope: kotlinx.coroutin
     LaunchedEffect(activeProfile) {
         val peer = settingsStore.peer.first()
         val hashes = settingsStore.vkHashes.first()
-        val workers = settingsStore.workersPerHash.first()
+        val workers = settingsStore.totalWorkers.first()
         val port = settingsStore.listenPort.first()
         val manualPorts = settingsStore.manualPortsEnabled.first()
         val serverDtlsPort = settingsStore.serverDtlsPort.first()
@@ -316,7 +316,7 @@ fun SettingsTabContent(context: android.content.Context, scope: kotlinx.coroutin
             putExtra("peer", finalPeer)
             putExtra("vk_hashes", finalHashes)
             putExtra("secondary_vk_hash", "")
-            putExtra("workers_per_hash", workersInput.toInt())
+            putExtra("total_workers", workersInput.toInt())
             putExtra("port", finalLocalPort)
             putExtra("sni", sniInput)
             putExtra("connection_password", finalPassword)
