@@ -18,6 +18,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import com.wdtt.client.SettingsStore
+import com.wdtt.client.ui.components.verticalScrollEdgeFade
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -37,10 +38,13 @@ fun SecretsDialog(
     var serverDtlsPort by rememberSaveable { mutableStateOf(initialServerDtlsPort.ifBlank { "56000" }) }
     var serverWgPort by rememberSaveable { mutableStateOf(initialServerWgPort.ifBlank { "56001" }) }
     var localPort by rememberSaveable { mutableStateOf(initialLocalPort.ifBlank { "9000" }) }
+    val scrollState = rememberScrollState()
 
     fun normalizePort(value: String, fallback: String): String {
         return value.toIntOrNull()?.takeIf { it in 1..65535 }?.toString() ?: fallback
     }
+
+    val isPasswordValid = passwordInput.isNotEmpty() && passwordInput.matches(Regex("^[a-zA-Z0-9_.!?:#/-]+$"))
 
     Dialog(onDismissRequest = onDismiss) {
         Surface(
@@ -50,7 +54,20 @@ fun SecretsDialog(
             tonalElevation = 8.dp
         ) {
             Column(
-                modifier = Modifier.padding(24.dp).fillMaxWidth().verticalScroll(rememberScrollState())
+                modifier = Modifier
+                    .padding(24.dp)
+                    .fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier
+                        .weight(1f, fill = false)
+                        .fillMaxWidth()
+                    .verticalScrollEdgeFade(
+                        canScrollBackward = scrollState.canScrollBackward,
+                        canScrollForward = scrollState.maxValue > 0,
+                        innerEdgeOffset = 6.dp
+                    )
+                    .verticalScroll(scrollState)
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -73,8 +90,6 @@ fun SecretsDialog(
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
-
-                val isPasswordValid = passwordInput.isNotEmpty() && passwordInput.matches(Regex("^[a-zA-Z0-9_.!?:#/-]+$"))
 
                 OutlinedTextField(
                     value = passwordInput,
@@ -119,7 +134,11 @@ fun SecretsDialog(
                     )
                 }
 
-                Spacer(modifier = Modifier.height(20.dp))
+                Spacer(modifier = Modifier.height(22.dp))
+
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
 
                 Button(
                     onClick = {

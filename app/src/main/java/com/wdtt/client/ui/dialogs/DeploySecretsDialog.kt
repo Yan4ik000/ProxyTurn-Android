@@ -16,6 +16,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.window.SecureFlagPolicy
 import com.jcraft.jsch.JSch
 import com.jcraft.jsch.KeyPair
 import com.wdtt.client.SettingsStore
@@ -313,5 +315,3 @@ private fun validateSshPrivateKey(privateKey: String, passphrase: String): Strin
         "Не удалось прочитать SSH-ключ: проверьте его формат."
     }
 }
-import androidx.compose.ui.window.DialogProperties
-import androidx.compose.ui.window.SecureFlagPolicy

@@ -247,7 +247,12 @@ fun MainScreen(
     var pendingRelease by remember { mutableStateOf<AppReleaseInfo?>(null) }
     val currentVersion = remember { "v${BuildConfig.VERSION_NAME.removePrefix("v")}" }
     val safeBottomInset = with(density) { WindowInsets.safeDrawing.getBottom(density).toDp() }
-    val navOverlayReserve = safeBottomInset + 96.dp
+    val navOverlayReserve = safeBottomInset + when (selectedTab) {
+        0 -> 94.dp
+        1 -> 78.dp
+        4 -> 78.dp
+        else -> 96.dp
+    }
 
     val activeNavItems = remember(wdttLinkMode) {
         if (wdttLinkMode) {

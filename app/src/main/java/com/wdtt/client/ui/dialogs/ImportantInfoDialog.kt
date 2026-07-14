@@ -14,9 +14,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.wdtt.client.ui.components.verticalScrollEdgeFade
 
 @Composable
 fun ImportantInfoDialog(onDismiss: () -> Unit) {
+    val scrollState = rememberScrollState()
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
@@ -28,7 +30,12 @@ fun ImportantInfoDialog(onDismiss: () -> Unit) {
             contentColor = MaterialTheme.colorScheme.onSurface,
             tonalElevation = 6.dp,
         ) {
-            Column(modifier = Modifier.padding(24.dp).verticalScroll(rememberScrollState())) {
+            Column(
+                modifier = Modifier
+                    .padding(24.dp)
+                    .verticalScrollEdgeFade(scrollState.canScrollBackward, scrollState.canScrollForward)
+                    .verticalScroll(scrollState)
+            ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
