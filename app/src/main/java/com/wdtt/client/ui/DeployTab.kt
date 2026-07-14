@@ -36,6 +36,7 @@ import com.wdtt.client.DeployManager
 import com.wdtt.client.SettingsStore
 import com.wdtt.client.TunnelManager
 import com.wdtt.client.WDTTColors
+import com.wdtt.client.ui.components.verticalScrollEdgeFade
 import com.wdtt.client.ui.dialogs.DeploySecretsDialog
 import com.wdtt.client.ui.dialogs.UninstallConfirmDialog
 import kotlinx.coroutines.Dispatchers
@@ -77,6 +78,10 @@ fun DeployTab() {
     val savedManualPorts by settingsStore.manualPortsEnabled.collectAsStateWithLifecycle(initialValue = false)
     val savedServerDtlsPort by settingsStore.serverDtlsPort.collectAsStateWithLifecycle(initialValue = 56000)
     val savedServerWgPort by settingsStore.serverWgPort.collectAsStateWithLifecycle(initialValue = 56001)
+    val savedSshKeyAuth by settingsStore.deploySshKeyAuth.collectAsStateWithLifecycle(initialValue = false)
+    val savedSshPublicKey by settingsStore.deploySshPublicKey.collectAsStateWithLifecycle(initialValue = "")
+    val savedSshPrivateKey by settingsStore.deploySshPrivateKey.collectAsStateWithLifecycle(initialValue = "")
+    val savedSshKeyPassphrase by settingsStore.deploySshKeyPassphrase.collectAsStateWithLifecycle(initialValue = "")
 
     var showSecretsDialog by remember { mutableStateOf(false) }
     var showUninstallDialog by remember { mutableStateOf(false) }
@@ -97,6 +102,8 @@ fun DeployTab() {
     val isDeploying by DeployManager.isDeploying.collectAsStateWithLifecycle()
     val deployProgress by DeployManager.deployProgress.collectAsStateWithLifecycle()
     val currentStep by DeployManager.currentStep.collectAsStateWithLifecycle()
+    val lastResult by DeployManager.lastResult.collectAsStateWithLifecycle()
+    val scrollState = rememberScrollState()
 
     LaunchedEffect(savedIp) { ip = savedIp }
     LaunchedEffect(savedLogin) { login = savedLogin }
@@ -110,7 +117,11 @@ fun DeployTab() {
     )
 
     Column(
-        modifier = Modifier.fillMaxSize().padding(16.dp),
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp)
+            .verticalScrollEdgeFade(scrollState.canScrollBackward, scrollState.canScrollForward)
+            .verticalScroll(scrollState),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Text(
@@ -124,19 +135,42 @@ fun DeployTab() {
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            OutlinedTextField(
-                value = ip,
-                onValueChange = {
-                    ip = it.filter { c -> !c.isWhitespace() }
-                    scope.launch { settingsStore.saveDeploy(ip, login, password, savedSshPort, dns1, dns2) }
-                },
-                label = { Text("IP сервера или домен (без порта)") },
-                placeholder = { Text("1.2.3.4 (без порта)") },
-                singleLine = true,
+            Row(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-                enabled = !isDeploying,
-            )
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                OutlinedTextField(
+                    value = ip,
+                    onValueChange = {
+                        ip = it.filter { c -> !c.isWhitespace() }
+                        scope.launch { settingsStore.saveDeploy(ip, login, password, savedSshPort, dns1, dns2) }
+                    },
+                    label = { Text("IP сервера или домен") },
+                    placeholder = { Text("1.2.3.4") },
+                    singleLine = true,
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(16.dp),
+                    enabled = !isDeploying,
+                )
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        "Пароль",
+                        color = if (!savedSshKeyAuth) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.labelMedium
+                    )
+                    Switch(
+                        checked = savedSshKeyAuth,
+                        enabled = !isDeploying,
+                        onCheckedChange = { enabled -> scope.launch { settingsStore.saveDeploySshKeyAuth(enabled) } }
+                    )
+                    Text(
+                        "SSH ключ",
+                        color = if (savedSshKeyAuth) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.labelMedium
+                    )
+                }
+            }
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -151,23 +185,25 @@ fun DeployTab() {
                     label = { Text("Логин") },
                     placeholder = { Text("root") },
                     singleLine = true,
-                    modifier = Modifier.weight(1f),
+                    modifier = if (savedSshKeyAuth) Modifier.fillMaxWidth() else Modifier.weight(1f),
                     shape = RoundedCornerShape(16.dp),
                     enabled = !isDeploying,
                 )
-                OutlinedTextField(
-                    value = password,
-                    onValueChange = {
-                        password = it.filter { c -> !c.isWhitespace() }
-                        scope.launch { settingsStore.saveDeploy(ip, login, password, savedSshPort, dns1, dns2) }
-                    },
-                    label = { Text("Пароль SSH") },
-                    placeholder = { Text("password") },
-                    singleLine = true,
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(16.dp),
-                    enabled = !isDeploying,
-                )
+                if (!savedSshKeyAuth) {
+                    OutlinedTextField(
+                        value = password,
+                        onValueChange = {
+                            password = it.filter { c -> !c.isWhitespace() }
+                            scope.launch { settingsStore.saveDeploy(ip, login, password, savedSshPort, dns1, dns2) }
+                        },
+                        label = { Text("Пароль SSH") },
+                        placeholder = { Text("password") },
+                        singleLine = true,
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(16.dp),
+                        enabled = !isDeploying,
+                    )
+                }
             }
 
             Row(
@@ -234,6 +270,10 @@ fun DeployTab() {
                 manualPortsEnabled = savedManualPorts,
                 initialServerDtlsPort = savedServerDtlsPort.toString(),
                 initialServerWgPort = savedServerWgPort.toString(),
+                sshKeyAuth = savedSshKeyAuth,
+                initialSshPublicKey = savedSshPublicKey,
+                initialSshPrivateKey = savedSshPrivateKey,
+                initialSshKeyPassphrase = savedSshKeyPassphrase,
                 onSaved = { _, _ -> },
                 onDismiss = { showSecretsDialog = false }
             )
@@ -274,8 +314,29 @@ fun DeployTab() {
             }
         }
 
+        if (!isDeploying && lastResult.isNotBlank() && lastResult != "success") {
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                color = MaterialTheme.colorScheme.errorContainer,
+                contentColor = MaterialTheme.colorScheme.onErrorContainer
+            ) {
+                Text(
+                    text = lastResult,
+                    modifier = Modifier.padding(16.dp),
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
+        }
+
         
-        val deploySecretsMissing = savedMainPass.isBlank()
+        val deploySecretsMissing = savedMainPass.isBlank() || (savedSshKeyAuth && savedSshPrivateKey.isBlank())
+        val secretsTitle = buildList {
+            if (savedSshKeyAuth) add("SSH ключ")
+            add("BOT")
+            add("Пароли")
+            if (savedManualPorts) add("Порты")
+        }.joinToString(", ")
         OutlinedButton(
             onClick = { showSecretsDialog = true },
             modifier = Modifier.fillMaxWidth().height(48.dp),
@@ -292,7 +353,7 @@ fun DeployTab() {
             Icon(Icons.Default.Key, null, Modifier.size(18.dp))
             Spacer(Modifier.width(8.dp))
             Text(
-                if (savedManualPorts) "Секреты (BOT, Пароли, Порты)" else "Секреты (BOT, Пароли)",
+                "Секреты ($secretsTitle)",
                 fontWeight = FontWeight.SemiBold
             )
         }
@@ -303,7 +364,7 @@ fun DeployTab() {
         ) {
             Button(
                 onClick = {
-                    if (ip.isBlank() || password.isBlank() || savedMainPass.isBlank()) return@Button
+                    if (ip.isBlank() || savedMainPass.isBlank() || (!savedSshKeyAuth && password.isBlank()) || (savedSshKeyAuth && savedSshPrivateKey.isBlank())) return@Button
                     val effectiveLogin = if (login.isBlank()) "root" else login
                     val effectiveDtlsPort = if (savedManualPorts) savedServerDtlsPort.coerceIn(1, 65535) else 56000
                     val effectiveWgPort = if (savedManualPorts) savedServerWgPort.coerceIn(1, 65535) else 56001
@@ -317,7 +378,8 @@ fun DeployTab() {
 
                             val success = performDeploy(
                                 context = appContext,
-                                host = ip, user = effectiveLogin, pass = password, port = savedSshPort.toIntOrNull() ?: 22,
+                                host = ip, user = effectiveLogin, password = password, sshKeyAuth = savedSshKeyAuth,
+                                sshPublicKey = savedSshPublicKey, sshPrivateKey = savedSshPrivateKey, sshKeyPassphrase = savedSshKeyPassphrase, port = savedSshPort.toIntOrNull() ?: 22,
                                 mainPass = savedMainPass, adminId = savedAdminId, botToken = savedBotToken,
                                 dtlsPort = effectiveDtlsPort, wgPort = effectiveWgPort, dns1 = dns1, dns2 = dns2,
                                 onProgress = { p, s -> DeployManager.updateProgress(p, s) }
@@ -334,7 +396,7 @@ fun DeployTab() {
                 modifier = Modifier.weight(1f).height(50.dp),
                 shape = RoundedCornerShape(16.dp),
                 colors = ButtonDefaults.buttonColors(contentColor = MaterialTheme.colorScheme.onPrimary),
-                enabled = !isDeploying && ip.isNotBlank() && password.isNotBlank() && savedMainPass.isNotBlank()
+                enabled = !isDeploying && ip.isNotBlank() && savedMainPass.isNotBlank() && if (savedSshKeyAuth) savedSshPrivateKey.isNotBlank() else password.isNotBlank()
             ) {
                 if (isDeploying) {
                     CircularProgressIndicator(modifier = Modifier.size(18.dp), color = MaterialTheme.colorScheme.onPrimary, strokeWidth = 2.dp)
@@ -347,7 +409,7 @@ fun DeployTab() {
 
             Button(
                 onClick = {
-                    if (ip.isBlank() || password.isBlank()) return@Button
+                    if (ip.isBlank() || (!savedSshKeyAuth && password.isBlank()) || (savedSshKeyAuth && savedSshPrivateKey.isBlank())) return@Button
                     showUninstallDialog = true
                 },
                 modifier = Modifier.weight(1f).height(50.dp),
@@ -356,7 +418,7 @@ fun DeployTab() {
                     containerColor = MaterialTheme.colorScheme.error,
                     contentColor = MaterialTheme.colorScheme.onError
                 ),
-                enabled = !isDeploying && ip.isNotBlank() && password.isNotBlank()
+                enabled = !isDeploying && ip.isNotBlank() && if (savedSshKeyAuth) savedSshPrivateKey.isNotBlank() else password.isNotBlank()
             ) {
                 Icon(Icons.Default.Delete, null, Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
@@ -376,7 +438,8 @@ fun DeployTab() {
                         try {
                             DeployManager.startDeploy()
                             performUninstall(
-                                host = ip, user = effectiveLogin, pass = password, port = savedSshPort.toIntOrNull() ?: 22,
+                                host = ip, user = effectiveLogin, password = password, sshKeyAuth = savedSshKeyAuth,
+                                sshPublicKey = savedSshPublicKey, sshPrivateKey = savedSshPrivateKey, sshKeyPassphrase = savedSshKeyPassphrase, port = savedSshPort.toIntOrNull() ?: 22,
                                 dtlsPort = effectiveDtlsPort, wgPort = effectiveWgPort,
                                 onProgress = { p, s -> DeployManager.updateProgress(p, s) }
                             )
@@ -415,9 +478,9 @@ fun DeployTab() {
     }
 }
 
-private class SSHClient(private val session: Session, private val pass: String) {
+private class SSHClient(private val session: Session) {
 
-    fun exec(command: String, timeout: Long = CMD_TIMEOUT): String {
+    fun exec(command: String, timeout: Long = CMD_TIMEOUT, stdin: String? = null): String {
         if (!session.isConnected) {
             DeployManager.writeError("SSH exec: сессия разорвана перед командой: ${command.take(80)}")
             return "error: session is down"
@@ -428,19 +491,14 @@ private class SSHClient(private val session: Session, private val pass: String) 
 
         return try {
             channel = session.openChannel("exec") as ChannelExec
-            val cmd = if (command.contains("sudo") && !command.contains("sudo -S")) {
-                command.replace("sudo ", "sudo -S ")
-            } else command
-
-            channel.setCommand(cmd)
-            val outStream = channel.outputStream
+            channel.setCommand(command)
+            val output = channel.outputStream
             val input = channel.inputStream
             val err = channel.errStream
             channel.connect(15000)
-
-            if (cmd.contains("sudo -S")) {
-                outStream.write("$pass\n".toByteArray())
-                outStream.flush()
+            if (stdin != null) {
+                output.write(stdin.toByteArray())
+                output.flush()
             }
 
             val reader = input.bufferedReader()
@@ -487,6 +545,13 @@ private class SSHClient(private val session: Session, private val pass: String) 
                 if (!reader.ready() && !errReader.ready()) Thread.sleep(100)
             }
 
+            val exitStatus = channel.exitStatus
+            if (exitStatus != 0) {
+                val message = "error: remote command exited with status $exitStatus"
+                result.appendLine(message)
+                DeployManager.writeError(message)
+                TunnelManager.addDeployErrorLog(message)
+            }
             result.toString()
         } catch (e: Exception) {
             DeployManager.writeError("SSH exec error: ${e.message} | cmd: ${command.take(80)}")
@@ -516,16 +581,35 @@ private class SSHClient(private val session: Session, private val pass: String) 
     }
 }
 
-private fun createSSHSession(host: String, user: String, pass: String, port: Int = 22): Session {
+private fun createSSHSession(
+    host: String,
+    user: String,
+    password: String,
+    sshKeyAuth: Boolean,
+    sshPublicKey: String,
+    sshPrivateKey: String,
+    sshKeyPassphrase: String,
+    port: Int = 22
+): Session {
     val jsch = JSch()
+    if (sshKeyAuth) {
+        val passphrase = sshKeyPassphrase.takeIf { it.isNotEmpty() }?.toByteArray()
+        val publicKey = sshPublicKey.takeIf { it.isNotBlank() }?.toByteArray()
+        runCatching {
+            jsch.addIdentity("wdtt-deploy-key", sshPrivateKey.toByteArray(), publicKey, passphrase)
+        }.getOrElse {
+            jsch.addIdentity("wdtt-deploy-key", sshPrivateKey.toByteArray(), null, passphrase)
+        }
+    }
     val session = jsch.getSession(user, host, port)
-    session.setPassword(pass)
+    if (!sshKeyAuth) session.setPassword(password)
     session.setConfig(Properties().apply {
         put("StrictHostKeyChecking", "no")
         put("ServerAliveInterval", "10")
         put("ServerAliveCountMax", "6")
         put("ConnectTimeout", "15000")
-        put("PreferredAuthentications", "password,keyboard-interactive")
+        put("PreferredAuthentications", if (sshKeyAuth) "publickey" else "password,keyboard-interactive")
+        put("ssh-ed25519", "com.jcraft.jsch.bc.SignatureEd25519")
     })
     session.connect(20000)
     return session
@@ -535,11 +619,60 @@ private fun shellQuote(value: String): String {
     return "'" + value.replace("'", "'\"'\"'") + "'"
 }
 
-private fun rootCommand(command: String): String {
+private enum class PrivilegeMode {
+    ROOT,
+    PASSWORDLESS_SUDO,
+    PASSWORD_SUDO
+}
+
+private class RootPrivilegesUnavailableException : Exception(
+    "Недоступны root-права. Войдите как root или настройте для пользователя беспарольный sudo."
+)
+
+private fun detectPrivilegeMode(ssh: SSHClient, allowPasswordSudo: Boolean): PrivilegeMode {
+    val uidOutput = ssh.exec("id -u")
+    if (uidOutput.lineSequence().any { it.trim() == "0" }) {
+        return PrivilegeMode.ROOT
+    }
+
+    val sudoOutput = ssh.exec("sudo -n true")
+    if (!sudoOutput.contains("error:")) {
+        return PrivilegeMode.PASSWORDLESS_SUDO
+    }
+
+    if (allowPasswordSudo) {
+        return PrivilegeMode.PASSWORD_SUDO
+    }
+
+    throw RootPrivilegesUnavailableException()
+}
+
+private fun rootCommand(command: String, privilegeMode: PrivilegeMode): String {
     val quoted = shellQuote(command)
-    return "if command -v sudo >/dev/null 2>&1; then sudo bash -c $quoted; " +
-        "elif [ \"\$(id -u)\" = \"0\" ]; then bash -c $quoted; " +
-        "else echo 'error: root privileges required and sudo not found'; exit 1; fi"
+    return when (privilegeMode) {
+        PrivilegeMode.ROOT -> "bash -c $quoted"
+        PrivilegeMode.PASSWORDLESS_SUDO -> "sudo -n bash -c $quoted"
+        PrivilegeMode.PASSWORD_SUDO -> "sudo -S -p '' bash -c $quoted"
+    }
+}
+
+private fun sudoPasswordInput(privilegeMode: PrivilegeMode, password: String): String? {
+    return if (privilegeMode == PrivilegeMode.PASSWORD_SUDO) "$password\n" else null
+}
+
+private fun deployFailureMessage(error: Exception, sshKeyAuth: Boolean): String {
+    val message = error.message.orEmpty()
+    val normalizedMessage = message.lowercase()
+    val authenticationFailed = normalizedMessage.contains("auth fail") || normalizedMessage.contains("userauth fail")
+    val publicKeyRejected = authenticationFailed && normalizedMessage.contains("publickey")
+    return when {
+        error is RootPrivilegesUnavailableException -> error.message.orEmpty()
+        !sshKeyAuth && publicKeyRejected -> "Сервер не принимает вход по паролю. Выберите вход через SSH-ключ."
+        sshKeyAuth && publicKeyRejected -> "SSH-ключ не принят сервером. Проверьте логин и добавлен ли публичный ключ в authorized_keys на VPS."
+        sshKeyAuth && authenticationFailed -> "Аутентификация по SSH-ключу не пройдена. Проверьте логин и соответствие ключа серверу."
+        authenticationFailed -> "SSH-аутентификация не пройдена. Проверьте логин и пароль."
+        else -> "Ошибка подключения: ${message.take(100)}"
+    }
 }
 
 private fun File.containsBinaryToken(token: String): Boolean {
@@ -566,7 +699,7 @@ private fun isUnsafeLegacyServerAsset(serverFile: File): Boolean {
 
 private suspend fun performDeploy(
     context: Context,
-    host: String, user: String, pass: String, port: Int,
+    host: String, user: String, password: String, sshKeyAuth: Boolean, sshPublicKey: String, sshPrivateKey: String, sshKeyPassphrase: String, port: Int,
     mainPass: String, adminId: String, botToken: String,
     dtlsPort: Int, wgPort: Int, dns1: String, dns2: String,
     onProgress: (Float, String) -> Unit
@@ -574,9 +707,11 @@ private suspend fun performDeploy(
     var session: Session? = null
     try {
         onProgress(0.02f, "Подключение...")
-        session = createSSHSession(host, user, pass, port)
+        session = createSSHSession(host, user, password, sshKeyAuth, sshPublicKey, sshPrivateKey, sshKeyPassphrase, port)
         DeployManager.activeSession = session
-        val ssh = SSHClient(session, pass)
+        val ssh = SSHClient(session)
+        onProgress(0.04f, "Проверка root-прав...")
+        val privilegeMode = detectPrivilegeMode(ssh, allowPasswordSudo = !sshKeyAuth)
 
         onProgress(0.05f, "Подготовка файлов...")
         val passArg = if (mainPass.isNotBlank()) "-password $mainPass " else ""
@@ -593,6 +728,7 @@ private suspend fun performDeploy(
         try {
             context.assets.open("deploy.sh").use { inp -> FileOutputStream(scriptFile).use { out -> inp.copyTo(out) } }
             context.assets.open("server").use { inp -> FileOutputStream(serverFile).use { out -> inp.copyTo(out) } }
+            scriptFile.writeText(scriptFile.readText().replace("\r\n", "\n"))
         } catch (e: Exception) {
             DeployManager.writeError("Assets extraction failed: ${e.message}")
             DeployManager.stopDeploy("Ошибка: файлы не найдены в assets")
@@ -614,27 +750,28 @@ private suspend fun performDeploy(
 
         onProgress(0.08f, "Установка...")
         val output = ssh.exec(
-            rootCommand("env WDTT_ARGS=${shellQuote(args)} WDTT_DTLS_PORT=$dtlsPort WDTT_WG_PORT=$wgPort WDTT_SSH_PORT=$port bash /tmp/deploy.sh"),
-            timeout = CMD_TIMEOUT
+            rootCommand("env WDTT_ARGS=${shellQuote(args)} WDTT_DTLS_PORT=$dtlsPort WDTT_WG_PORT=$wgPort WDTT_SSH_PORT=$port bash /tmp/deploy.sh", privilegeMode),
+            timeout = CMD_TIMEOUT,
+            stdin = sudoPasswordInput(privilegeMode, password)
         )
 
-        if (output.contains("✅") || output.contains("Деплой успешно") || output.contains("active")) {
+        if (output.contains("error:")) {
+            DeployManager.writeError("Deploy script output contains error")
+            DeployManager.stopDeploy("Ошибка выполнения скрипта. Откройте логи деплоя.")
+            return@withContext false
+        } else if (output.contains("✅") || output.contains("Деплой успешно") || output.contains("active")) {
             DeployManager.stopDeploy("success")
             TunnelManager.addDeploySuccessLog("Деплой успешно завершен. Сервис активен.")
             return@withContext true
-        } else if (output.contains("error:")) {
-            DeployManager.writeError("Deploy script output contains error")
-            DeployManager.stopDeploy("Ошибка выполнения скрипта (см. errors.log)")
-            return@withContext false
         } else {
-            DeployManager.stopDeploy("success")
-            TunnelManager.addDeploySuccessLog("Деплой завершён. (Проверьте подключение)")
-            return@withContext true
+            DeployManager.writeError("Deploy script did not confirm service activation")
+            DeployManager.stopDeploy("Не удалось подтвердить запуск сервиса. Откройте логи деплоя.")
+            return@withContext false
         }
 
     } catch (e: Exception) {
         DeployManager.writeError("Deploy critical: ${e.message}\n${e.stackTraceToString().take(500)}")
-        DeployManager.stopDeploy("Ошибка: ${e.message?.take(100)}")
+        DeployManager.stopDeploy(deployFailureMessage(e, sshKeyAuth))
         return@withContext false
     } finally {
         try { session?.disconnect() } catch (_: Exception) {}
@@ -643,34 +780,46 @@ private suspend fun performDeploy(
 }
 
 private suspend fun performUninstall(
-    host: String, user: String, pass: String, port: Int,
+    host: String, user: String, password: String, sshKeyAuth: Boolean, sshPublicKey: String, sshPrivateKey: String, sshKeyPassphrase: String, port: Int,
     dtlsPort: Int, wgPort: Int,
     onProgress: (Float, String) -> Unit
 ) = withContext(Dispatchers.IO) {
     var session: Session? = null
     try {
         onProgress(0.05f, "Подключение...")
-        session = createSSHSession(host, user, pass, port)
+        session = createSSHSession(host, user, password, sshKeyAuth, sshPublicKey, sshPrivateKey, sshKeyPassphrase, port)
         DeployManager.activeSession = session
-        val ssh = SSHClient(session, pass)
+        val ssh = SSHClient(session)
+        onProgress(0.10f, "Проверка root-прав...")
+        val privilegeMode = detectPrivilegeMode(ssh, allowPasswordSudo = !sshKeyAuth)
 
         onProgress(0.15f, "Остановка сервиса...")
         ssh.exec(
             rootCommand(
                 "systemctl unmask wdtt 2>/dev/null || true; " +
                     "systemctl stop wdtt 2>/dev/null || true; " +
-                    "systemctl disable wdtt 2>/dev/null || true; " +
+                "systemctl disable wdtt 2>/dev/null || true; " +
                     "rm -f /etc/systemd/system/wdtt.service; " +
-                    "systemctl daemon-reload 2>/dev/null || true"
+                    "systemctl daemon-reload 2>/dev/null || true",
+                privilegeMode
             ),
-            timeout = 15000L
+            timeout = 15000L,
+            stdin = sudoPasswordInput(privilegeMode, password)
         )
 
         onProgress(0.30f, "Удаление через deploy.sh...")
-        ssh.exec(rootCommand("[ -f /tmp/deploy.sh ] && env WDTT_DTLS_PORT=$dtlsPort WDTT_WG_PORT=$wgPort WDTT_SSH_PORT=$port bash /tmp/deploy.sh uninstall 2>/dev/null || true"), timeout = 30000L)
+        ssh.exec(
+            rootCommand("[ -f /tmp/deploy.sh ] && env WDTT_DTLS_PORT=$dtlsPort WDTT_WG_PORT=$wgPort WDTT_SSH_PORT=$port bash /tmp/deploy.sh uninstall 2>/dev/null || true", privilegeMode),
+            timeout = 30000L,
+            stdin = sudoPasswordInput(privilegeMode, password)
+        )
 
         onProgress(0.45f, "Удаление бинарника...")
-        ssh.exec(rootCommand("pkill -x wdtt-server 2>/dev/null || true; rm -f /usr/local/bin/wdtt-server"), timeout = 10000L)
+        ssh.exec(
+            rootCommand("pkill -x wdtt-server 2>/dev/null || true; rm -f /usr/local/bin/wdtt-server", privilegeMode),
+            timeout = 10000L,
+            stdin = sudoPasswordInput(privilegeMode, password)
+        )
 
         onProgress(0.60f, "Очистка firewall...")
         ssh.exec(
@@ -689,34 +838,42 @@ private suspend fun performUninstall(
                     "iptables -D FORWARD -i wdtt0 -m comment --comment WDTT_MANAGED -j ACCEPT 2>/dev/null || true; " +
                     "iptables -D FORWARD -o wdtt0 -m comment --comment WDTT_MANAGED -j ACCEPT 2>/dev/null || true; " +
                     "done; fi; " +
-                    "if command -v nft >/dev/null 2>&1; then " +
+                "if command -v nft >/dev/null 2>&1; then " +
                     "nft delete table ip wdtt 2>/dev/null || true; " +
                     "nft delete table inet wdtt 2>/dev/null || true; " +
                     "nft delete table inet wdtt_mangle 2>/dev/null || true; " +
-                    "fi"
+                    "fi",
+                privilegeMode
             ),
-            timeout = 15000L
+            timeout = 15000L,
+            stdin = sudoPasswordInput(privilegeMode, password)
         )
 
         onProgress(0.75f, "Удаление WDTT-интерфейса...")
         ssh.exec(
             rootCommand(
-                "ip link show wdtt0 >/dev/null 2>&1 && ip link del wdtt0 2>/dev/null || true; " +
+                    "ip link show wdtt0 >/dev/null 2>&1 && ip link del wdtt0 2>/dev/null || true; " +
                     "[ -d /etc/wdtt ] && find /etc/wdtt -mindepth 1 -maxdepth 1 ! -name passwords.json -exec rm -rf {} + 2>/dev/null || true; " +
-                    "[ -f /etc/wdtt/passwords.json ] && chmod 600 /etc/wdtt/passwords.json 2>/dev/null || true"
+                    "[ -f /etc/wdtt/passwords.json ] && chmod 600 /etc/wdtt/passwords.json 2>/dev/null || true",
+                privilegeMode
             ),
-            timeout = 10000L
+            timeout = 10000L,
+            stdin = sudoPasswordInput(privilegeMode, password)
         )
 
         onProgress(0.90f, "Очистка sysctl...")
-        ssh.exec(rootCommand("rm -f /etc/sysctl.d/99-wdtt.conf; sysctl --system >/dev/null 2>&1 || true"), timeout = 15000L)
+        ssh.exec(
+            rootCommand("rm -f /etc/sysctl.d/99-wdtt.conf; sysctl --system >/dev/null || true", privilegeMode),
+            timeout = 15000L,
+            stdin = sudoPasswordInput(privilegeMode, password)
+        )
 
         onProgress(1.0f, "Готово!")
         DeployManager.stopDeploy("success")
 
     } catch (e: Exception) {
         DeployManager.writeError("Uninstall error: ${e.message}")
-        DeployManager.stopDeploy("Ошибка: ${e.message?.take(100)}")
+        DeployManager.stopDeploy(deployFailureMessage(e, sshKeyAuth))
     } finally {
         try { session?.disconnect() } catch (_: Exception) {}
         DeployManager.activeSession = null
