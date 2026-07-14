@@ -16,6 +16,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.window.SecureFlagPolicy
 import com.jcraft.jsch.JSch
 import com.jcraft.jsch.KeyPair
 import com.wdtt.client.SettingsStore
@@ -63,7 +65,12 @@ fun DeploySecretsDialog(
 
     val isPasswordValid = passInput.isNotEmpty() && passInput.matches(Regex("^[a-zA-Z0-9_.!?:#/-]+$"))
 
-    Dialog(onDismissRequest = { if (!isSaving) onDismiss() }) {
+    Dialog(
+        onDismissRequest = { if (!isSaving) onDismiss() },
+        properties = DialogProperties(
+            securePolicy = SecureFlagPolicy.SecureOn
+        )
+    ) {
         Surface(
             shape = RoundedCornerShape(24.dp),
             color = MaterialTheme.colorScheme.surface,
