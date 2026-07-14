@@ -230,7 +230,7 @@ object TunnelManager {
                 }
 
                 val hashCount = hashList.size.coerceIn(1, 3)
-                val totalWorkers = params.workersPerHash.coerceIn(1, 128)
+                val totalWorkers = params.totalWorkers.coerceIn(1, 128)
                 
                 val hashMode = if (activeHashIndex == 0) "Основной" else "Запасной"
                 updateLog("config_info", "[$hashMode] Хешей=$hashCount, Потоков=$totalWorkers", 1)
@@ -885,7 +885,7 @@ data class TunnelParams(
     val peer: String,
     val vkHashes: String,
     val secondaryVkHash: String = "",
-    val workersPerHash: Int,
+    val totalWorkers: Int,
     val port: Int,
     val sni: String = "",
     val connectionPassword: String = "",
