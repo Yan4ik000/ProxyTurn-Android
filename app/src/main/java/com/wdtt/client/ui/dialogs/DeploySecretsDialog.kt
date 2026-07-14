@@ -63,7 +63,12 @@ fun DeploySecretsDialog(
 
     val isPasswordValid = passInput.isNotEmpty() && passInput.matches(Regex("^[a-zA-Z0-9_.!?:#/-]+$"))
 
-    Dialog(onDismissRequest = { if (!isSaving) onDismiss() }) {
+    Dialog(
+        onDismissRequest = { if (!isSaving) onDismiss() },
+        properties = DialogProperties(
+            securePolicy = SecureFlagPolicy.SecureOn
+        )
+    ) {
         Surface(
             shape = RoundedCornerShape(24.dp),
             color = MaterialTheme.colorScheme.surface,
@@ -308,3 +313,5 @@ private fun validateSshPrivateKey(privateKey: String, passphrase: String): Strin
         "Не удалось прочитать SSH-ключ: проверьте его формат."
     }
 }
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.window.SecureFlagPolicy
