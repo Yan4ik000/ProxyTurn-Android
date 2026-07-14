@@ -199,7 +199,8 @@ fun SettingsTabContent(context: android.content.Context, scope: kotlinx.coroutin
         
         peerInput = peer
         parseHashes(hashes)
-        workersInput = roundToGroup(workers.toFloat(), (listOf(vkHash1, vkHash2, vkHash3, vkHash4).count { it.isNotBlank() }.coerceAtLeast(1) * 27).toFloat())
+        val maxWorkers = (listOf(vkHash1, vkHash2, vkHash3, vkHash4).count { it.isNotBlank() }.coerceAtLeast(1) * 27).toFloat()
+        workersInput = roundToGroup(workers.toFloat(), WORKERS_PER_GROUP.toFloat()).coerceIn(WORKERS_PER_GROUP.toFloat(), maxWorkers)
         portInput = port.toString()
         manualPortsEnabled = manualPorts
         serverDtlsPortInput = serverDtlsPort.toString()
@@ -494,12 +495,12 @@ fun SettingsTabContent(context: android.content.Context, scope: kotlinx.coroutin
 
                     val maxWorkers = dynamicMaxWorkers
                     val minWorkers = WORKERS_PER_GROUP.toFloat()
-                    val currentWorkersVal = roundToGroup(currentWorkers.coerceIn(minWorkers, maxWorkers), maxWorkers)
+                    val currentWorkersVal = roundToGroup(currentWorkers.coerceIn(minWorkers, maxWorkers), WORKERS_PER_GROUP.toFloat())
 
                     CompactSteppedSlider(
                         value = currentWorkersVal,
                         onValueChange = { raw ->
-                            workersInput = roundToGroup(raw, maxWorkers)
+                            workersInput = roundToGroup(raw, WORKERS_PER_GROUP.toFloat())
                             scheduleSave()
                         },
                         valueRange = minWorkers..maxWorkers,
