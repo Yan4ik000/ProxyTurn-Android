@@ -50,6 +50,7 @@ import com.wdtt.client.TunnelService
 import com.wdtt.client.WDTTColors
 import com.wdtt.client.ui.dialogs.HashesDialog
 import com.wdtt.client.ui.dialogs.SecretsDialog
+import com.wdtt.client.ui.components.verticalScrollEdgeFade
 import com.wdtt.client.ui.utils.stripVkUrlStatic
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -399,6 +400,7 @@ fun SettingsTabContent(context: android.content.Context, scope: kotlinx.coroutin
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .verticalScrollEdgeFade(scrollState.canScrollBackward, scrollState.canScrollForward)
             .verticalScroll(scrollState)
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)

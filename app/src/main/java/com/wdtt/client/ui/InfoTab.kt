@@ -1,6 +1,7 @@
 package com.wdtt.client.ui
 
 import com.wdtt.client.ui.dialogs.ImportantInfoDialog
+import com.wdtt.client.ui.components.verticalScrollEdgeFade
 import androidx.compose.runtime.MutableState
 
 import android.content.ClipData
@@ -175,6 +176,7 @@ fun InfoTab(
     var projectExpanded by projectExpandedState
     val updateLatestVersion by settingsStore.updateLatestVersion.collectAsStateWithLifecycle(initialValue = "")
     val updateLastError by settingsStore.updateLastError.collectAsStateWithLifecycle(initialValue = "")
+    val scrollState = rememberScrollState()
     val updateStatus = remember(isCheckingUpdates, updateLatestVersion, updateLastError, currentVersion) {
         when {
             isCheckingUpdates -> "Проверяем GitHub releases..."
@@ -190,8 +192,9 @@ fun InfoTab(
         modifier = Modifier
             .fillMaxSize()
             .fillMaxWidth()
-            .padding(start = 16.dp, end = 16.dp, top = 0.dp, bottom = 28.dp)
-            .verticalScroll(rememberScrollState()),
+            .padding(start = 16.dp, end = 16.dp, top = 0.dp, bottom = 12.dp)
+            .verticalScrollEdgeFade(scrollState.canScrollBackward, scrollState.canScrollForward)
+            .verticalScroll(scrollState),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         Row(
@@ -402,7 +405,7 @@ fun InfoTab(
             )
         }
 
-        Spacer(modifier = Modifier.height(20.dp))
+        Spacer(modifier = Modifier.height(8.dp))
     }
 
     if (showHelpDialog) ImportantInfoDialog(onDismiss = { showHelpDialog = false })

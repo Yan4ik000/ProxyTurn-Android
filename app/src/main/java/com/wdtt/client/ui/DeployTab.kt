@@ -22,6 +22,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import com.wdtt.client.TunnelService
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -104,6 +106,9 @@ fun DeployTab() {
     val currentStep by DeployManager.currentStep.collectAsStateWithLifecycle()
     val lastResult by DeployManager.lastResult.collectAsStateWithLifecycle()
     val scrollState = rememberScrollState()
+    val isDarkSurface = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+    val activeAuthMethodColor = if (isDarkSurface) Color.White else Color(0xFF1C1B1A)
+    val inactiveAuthMethodColor = if (isDarkSurface) Color(0xFF9E9E9E) else Color(0xFF757575)
 
     LaunchedEffect(savedIp) { ip = savedIp }
     LaunchedEffect(savedLogin) { login = savedLogin }
@@ -156,7 +161,7 @@ fun DeployTab() {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
                         "Пароль",
-                        color = if (!savedSshKeyAuth) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = if (!savedSshKeyAuth) activeAuthMethodColor else inactiveAuthMethodColor,
                         style = MaterialTheme.typography.labelMedium
                     )
                     Switch(
@@ -166,7 +171,7 @@ fun DeployTab() {
                     )
                     Text(
                         "SSH ключ",
-                        color = if (savedSshKeyAuth) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = if (savedSshKeyAuth) activeAuthMethodColor else inactiveAuthMethodColor,
                         style = MaterialTheme.typography.labelMedium
                     )
                 }
