@@ -49,7 +49,7 @@ object AppCache {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ExceptionsTab() {
+fun ExceptionsTab(showTitle: Boolean = true) {
     val context = LocalContext.current.applicationContext
     val scope = rememberCoroutineScope()
     val settingsStore = remember { SettingsStore(context) }
@@ -122,19 +122,21 @@ fun ExceptionsTab() {
 
     Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
         
-        Text(
-            "Исключения приложений",
-            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-            color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.padding(top = 16.dp, bottom = 4.dp)
-        )
+        if (showTitle) {
+            Text(
+                "Исключения для приложений",
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.padding(top = 16.dp, bottom = 4.dp)
+            )
+        }
 
         
         OutlinedTextField(
             value = searchQuery,
             onValueChange = { searchQuery = it },
             placeholder = { Text("Поиск приложений...", fontSize = 14.sp) },
-            modifier = Modifier.fillMaxWidth().padding(top = 12.dp).height(52.dp),
+            modifier = Modifier.fillMaxWidth().padding(top = if (showTitle) 12.dp else 4.dp).height(52.dp),
             shape = RoundedCornerShape(16.dp),
             leadingIcon = { Icon(Icons.Default.Search, null, modifier = Modifier.size(20.dp)) },
             singleLine = true,

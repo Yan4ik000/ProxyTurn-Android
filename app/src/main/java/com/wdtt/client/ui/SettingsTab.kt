@@ -1,39 +1,55 @@
 package com.wdtt.client.ui
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.CloudUpload
+import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Key
-import androidx.compose.material.icons.filled.PowerSettingsNew
-import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Tag
+import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
@@ -41,10 +57,13 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.wdtt.client.SettingsStore
+import com.wdtt.client.R
 import com.wdtt.client.TunnelManager
 import com.wdtt.client.TunnelService
 import com.wdtt.client.WDTTColors
@@ -53,9 +72,11 @@ import com.wdtt.client.ui.dialogs.SecretsDialog
 import com.wdtt.client.ui.components.verticalScrollEdgeFade
 import com.wdtt.client.ui.utils.stripVkUrlStatic
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withContext
 import android.content.Intent
 import android.net.VpnService
 import android.os.Build
@@ -68,7 +89,11 @@ private const val WORKERS_PER_GROUP = 9
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsTab() {
+fun SettingsTab(
+    mainPageBottomPadding: androidx.compose.ui.unit.Dp = 0.dp,
+    onNestedPageChanged: (Int) -> Unit = {},
+    mainPageOverlay: @Composable BoxScope.() -> Unit = {}
+) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val settingsStore = remember { SettingsStore(context) }
@@ -77,13 +102,27 @@ fun SettingsTab() {
     CompositionLocalProvider(
         LocalDensity provides Density(currentDensity.density, fontScale = 1f)
     ) {
-        SettingsTabContent(context, scope, settingsStore)
+        SettingsTabContent(
+            context,
+            scope,
+            settingsStore,
+            mainPageBottomPadding,
+            onNestedPageChanged,
+            mainPageOverlay
+        )
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsTabContent(context: android.content.Context, scope: kotlinx.coroutines.CoroutineScope, settingsStore: SettingsStore) {
+fun SettingsTabContent(
+    context: android.content.Context,
+    scope: kotlinx.coroutines.CoroutineScope,
+    settingsStore: SettingsStore,
+    mainPageBottomPadding: androidx.compose.ui.unit.Dp = 0.dp,
+    onNestedPageChanged: (Int) -> Unit = {},
+    mainPageOverlay: @Composable BoxScope.() -> Unit = {}
+) {
     val savedConnectionPassword by settingsStore.connectionPassword.collectAsStateWithLifecycle(initialValue = "")
     val savedManualPortsEnabled by settingsStore.manualPortsEnabled.collectAsStateWithLifecycle(initialValue = false)
     val savedServerDtlsPort by settingsStore.serverDtlsPort.collectAsStateWithLifecycle(initialValue = 56000)
@@ -96,9 +135,11 @@ fun SettingsTabContent(context: android.content.Context, scope: kotlinx.coroutin
 
     val activeFingerprint by settingsStore.selectedFingerprint.collectAsStateWithLifecycle(initialValue = "firefox")
     val activeClientIds by settingsStore.activeClientIds.collectAsStateWithLifecycle(initialValue = "8202606,6287487")
+    val clientIdCheckResultsJson by settingsStore.clientIdCheckResults.collectAsStateWithLifecycle(initialValue = "{}")
     val savedObfsMode by settingsStore.obfsMode.collectAsStateWithLifecycle(initialValue = "audio")
 
     val tunnelRunning by TunnelManager.running.collectAsStateWithLifecycle()
+    val tunnelConfig by TunnelManager.config.collectAsStateWithLifecycle()
 
     val cooldownActive by TunnelManager.cooldownActive.collectAsStateWithLifecycle()
     var wasRunning by remember { mutableStateOf(false) }
@@ -166,6 +207,24 @@ fun SettingsTabContent(context: android.content.Context, scope: kotlinx.coroutin
     val hasInputHashErrors = remember(vkHash1, vkHash2, vkHash3, vkHash4) { hashErrors.isNotEmpty() }
 
     var showSecretsDialog by rememberSaveable { mutableStateOf(false) }
+    var exceptionsOpen by rememberSaveable { mutableStateOf(false) }
+    var showClearProfileDialog by rememberSaveable { mutableStateOf(false) }
+    var profileRevision by remember { mutableIntStateOf(0) }
+    var isCheckingClientIds by remember { mutableStateOf(false) }
+    val clientIdCheckResults = remember(clientIdCheckResultsJson) {
+        try {
+            val json = org.json.JSONObject(clientIdCheckResultsJson)
+            buildMap<String, Boolean> {
+                val keys = json.keys()
+                while (keys.hasNext()) {
+                    val key = keys.next()
+                    put(key, json.optBoolean(key, false))
+                }
+            }
+        } catch (_: Exception) {
+            emptyMap()
+        }
+    }
     var initialized by remember { mutableStateOf(false) }
 
     fun parseHashes(raw: String) {
@@ -184,7 +243,7 @@ fun SettingsTabContent(context: android.content.Context, scope: kotlinx.coroutin
             .joinToString(",")
     }
 
-    LaunchedEffect(activeProfile) {
+    LaunchedEffect(activeProfile, profileRevision) {
         val peer = settingsStore.peer.first()
         val hashes = settingsStore.vkHashes.first()
         val workers = settingsStore.totalWorkers.first()
@@ -267,6 +326,22 @@ fun SettingsTabContent(context: android.content.Context, scope: kotlinx.coroutin
     }
 
     val scrollState = rememberScrollState()
+    var settingsOpen by rememberSaveable { mutableStateOf(false) }
+    var deployOpen by rememberSaveable { mutableStateOf(false) }
+
+    val currentNestedPageCallback by rememberUpdatedState(onNestedPageChanged)
+    LaunchedEffect(settingsOpen, deployOpen) {
+        currentNestedPageCallback(
+            when {
+                deployOpen -> 2
+                settingsOpen -> 1
+                else -> 0
+            }
+        )
+    }
+    DisposableEffect(Unit) {
+        onDispose { currentNestedPageCallback(0) }
+    }
 
     val isPeerValid = peerInput.isNotBlank() && !peerInput.contains(":")
     val isHashesValid = combinedHashes.isNotBlank()
@@ -397,25 +472,206 @@ fun SettingsTabContent(context: android.content.Context, scope: kotlinx.coroutin
         )
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScrollEdgeFade(scrollState.canScrollBackward, scrollState.canScrollForward)
-            .verticalScroll(scrollState)
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            if (!wdttLinkMode) {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    
+    if (showClearProfileDialog) {
+        Dialog(onDismissRequest = { showClearProfileDialog = false }) {
+            Surface(
+                shape = RoundedCornerShape(24.dp),
+                color = MaterialTheme.colorScheme.surface,
+                contentColor = MaterialTheme.colorScheme.onSurface,
+                tonalElevation = 8.dp
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(24.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Outlined.Delete,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.size(24.dp)
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                "Очистка профиля",
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        IconButton(onClick = { showClearProfileDialog = false }) {
+                            Icon(Icons.Default.Close, contentDescription = "Закрыть")
+                        }
+                    }
+
+                    Spacer(Modifier.height(16.dp))
                     Text(
-                        "Настройки туннеля",
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                        "Вы точно хотите очистить текущий профиль?",
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                    Spacer(Modifier.height(24.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = { showClearProfileDialog = false },
+                            modifier = Modifier.weight(1f).height(48.dp),
+                            shape = RoundedCornerShape(16.dp)
+                        ) {
+                            Text("Нет", fontWeight = FontWeight.SemiBold)
+                        }
+                        Button(
+                            onClick = {
+                                showClearProfileDialog = false
+                                scope.launch {
+                                    settingsStore.clearActiveProfile()
+                                    profileRevision++
+                                }
+                            },
+                            modifier = Modifier.weight(1f).height(48.dp),
+                            shape = RoundedCornerShape(16.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.error,
+                                contentColor = MaterialTheme.colorScheme.onError
+                            )
+                        ) {
+                            Text("Да", fontWeight = FontWeight.SemiBold)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    BackHandler(enabled = deployOpen) { deployOpen = false }
+    BackHandler(enabled = exceptionsOpen && settingsOpen && !deployOpen) { exceptionsOpen = false }
+    BackHandler(enabled = settingsOpen && !deployOpen && !exceptionsOpen) { settingsOpen = false }
+
+    AnimatedContent(
+        targetState = deployOpen,
+        transitionSpec = {
+            if (targetState) {
+                (slideInHorizontally(tween(320)) { it / 2 } + fadeIn(tween(260))) togetherWith
+                    (slideOutHorizontally(tween(280)) { -it / 3 } + fadeOut(tween(180)))
+            } else {
+                (slideInHorizontally(tween(320)) { -it / 2 } + fadeIn(tween(260))) togetherWith
+                    (slideOutHorizontally(tween(280)) { it / 3 } + fadeOut(tween(180)))
+            }
+        },
+        label = "deploy_nested_page"
+    ) { showDeploy ->
+        if (showDeploy) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp)
+                        .padding(top = 16.dp, bottom = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    IconButton(onClick = { deployOpen = false }) {
+                        Icon(
+                            Icons.Default.ArrowBack,
+                            contentDescription = "Назад",
+                            tint = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                    Text(
+                        "Установка на сервер",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
                     )
+                }
+                Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
+                    DeployTab()
+                }
+            }
+        } else {
+    AnimatedContent(
+        targetState = settingsOpen,
+        transitionSpec = {
+            if (targetState) {
+                (slideInHorizontally(tween(320)) { -it / 2 } + fadeIn(tween(260))) togetherWith
+                    (slideOutHorizontally(tween(280)) { it / 3 } + fadeOut(tween(180)))
+            } else {
+                (slideInHorizontally(tween(320)) { it / 2 } + fadeIn(tween(260))) togetherWith
+                    (slideOutHorizontally(tween(280)) { -it / 3 } + fadeOut(tween(180)))
+            }
+        },
+        label = "tunnel_settings_page"
+    ) { showSettings ->
+        if (showSettings) {
+            Column(
+                modifier = Modifier.fillMaxSize()
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp)
+                        .padding(top = 16.dp, bottom = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    IconButton(onClick = {
+                        if (exceptionsOpen) exceptionsOpen = false else settingsOpen = false
+                    }) {
+                        Icon(
+                            Icons.Default.ArrowBack,
+                            contentDescription = "Назад",
+                            tint = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                    Text(
+                        if (exceptionsOpen) "Исключения для приложений" else "Настройки туннеля",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
 
-                    
+                AnimatedContent(
+                    targetState = exceptionsOpen,
+                    transitionSpec = {
+                        fadeIn(tween(300)) togetherWith fadeOut(tween(225))
+                    },
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth(),
+                    label = "exceptions_settings_page"
+                ) { showExceptions ->
+                    if (showExceptions) {
+                        ExceptionsTab(showTitle = false)
+                    } else Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScrollEdgeFade(
+                            scrollState.canScrollBackward,
+                            scrollState.canScrollForward,
+                            fadeHeight = 14.dp
+                        )
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .verticalScroll(scrollState)
+                            .padding(horizontal = 16.dp, vertical = 4.dp),
+                        verticalArrangement = Arrangement.Top
+                    ) {
+            AnimatedVisibility(
+                visible = !wdttLinkMode,
+                enter = fadeIn(tween(190)) + expandVertically(tween(300), expandFrom = Alignment.Top),
+                exit = fadeOut(tween(190)) + shrinkVertically(tween(300), shrinkTowards = Alignment.Top)
+            ) {
+                Column {
                     AppSectionCard(
                         contentPadding = PaddingValues(16.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -438,34 +694,8 @@ fun SettingsTabContent(context: android.content.Context, scope: kotlinx.coroutin
                             )
                         )
 
-                        OutlinedButton(
-                            onClick = { showHashesDialog = true },
-                            modifier = Modifier.fillMaxWidth().height(56.dp),
-                            shape = RoundedCornerShape(16.dp),
-                            colors = ButtonDefaults.outlinedButtonColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                                contentColor = MaterialTheme.colorScheme.onSurface
-                            ),
-                            border = BorderStroke(
-                                1.dp,
-                                if (hasInputHashErrors) MaterialTheme.colorScheme.error
-                                else MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
-                            )
-                        ) {
-                            Icon(Icons.Default.Tag, null, Modifier.size(18.dp))
-                            Spacer(Modifier.width(8.dp))
-                            Text("Настройка VK Хешей ($filledHashCount/4)", fontWeight = FontWeight.SemiBold)
-                        }
-
-                        val errorTexts = hashErrors.filter { !it.contains("короткий") }
-                        if (errorTexts.isNotEmpty()) {
-                            Text(
-                                text = errorTexts.joinToString(", "),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.error
-                            )
-                        }
                     }
+                    Spacer(Modifier.height(12.dp))
                 }
             }
 
@@ -511,56 +741,84 @@ fun SettingsTabContent(context: android.content.Context, scope: kotlinx.coroutin
                         modifier = Modifier.fillMaxWidth()
                     )
 
-                    
+                    Spacer(Modifier.height(6.dp))
+
+                    OutlinedButton(
+                        onClick = { showHashesDialog = true },
+                        modifier = Modifier.fillMaxWidth().height(56.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                            contentColor = MaterialTheme.colorScheme.onSurface
+                        ),
+                        border = BorderStroke(
+                            1.dp,
+                            if (hasInputHashErrors) MaterialTheme.colorScheme.error
+                            else MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
+                        )
+                    ) {
+                        Icon(Icons.Default.Tag, null, Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("Настройка VK Хешей ($filledHashCount/4)", fontWeight = FontWeight.SemiBold)
+                    }
+
+                    val errorTexts = hashErrors.filter { !it.contains("короткий") }
+                    if (errorTexts.isNotEmpty()) {
+                        Text(
+                            text = errorTexts.joinToString(", "),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.padding(top = 6.dp)
+                        )
+                    }
+
                     HorizontalDivider(
-                        modifier = Modifier.padding(vertical = 4.dp),
+                        modifier = Modifier.padding(vertical = 10.dp),
                         color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
                     )
 
-                    
                     Row(
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            "Режим",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Medium,
-                            modifier = Modifier.weight(1f)
-                        )
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            ProtocolChip("Вызов", useVKCallsAuth, enabled = !tunnelRunning) {
-                                useVKCallsAuth = true
-                                scope.launch { settingsStore.saveVkAuthMode("vkcalls") }
-                            }
-                            ProtocolChip("Капча", !useVKCallsAuth, enabled = !tunnelRunning) {
-                                useVKCallsAuth = false
-                                scope.launch { settingsStore.saveVkAuthMode("legacy") }
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text("Режим", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                ProtocolChip("Вызов", useVKCallsAuth, enabled = !tunnelRunning) {
+                                    useVKCallsAuth = true
+                                    scope.launch { settingsStore.saveVkAuthMode("vkcalls") }
+                                }
+                                ProtocolChip("Капча", !useVKCallsAuth, enabled = !tunnelRunning) {
+                                    useVKCallsAuth = false
+                                    scope.launch { settingsStore.saveVkAuthMode("legacy") }
+                                }
                             }
                         }
-                    }
 
-                    
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(
-                            "Маскировка",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Medium,
-                            modifier = Modifier.weight(1f)
+                        VerticalDivider(
+                            modifier = Modifier.height(72.dp).padding(horizontal = 8.dp),
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f)
                         )
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            ProtocolChip("Аудио", obfsMode == "audio", enabled = !tunnelRunning) {
-                                obfsMode = "audio"
-                                scope.launch { settingsStore.saveObfsMode("audio") }
-                            }
-                            ProtocolChip("Видео", obfsMode == "video", enabled = !tunnelRunning) {
-                                obfsMode = "video"
-                                scope.launch { settingsStore.saveObfsMode("video") }
+
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text("Маскировка", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                ProtocolChip("Аудио", obfsMode == "audio", enabled = !tunnelRunning) {
+                                    obfsMode = "audio"
+                                    scope.launch { settingsStore.saveObfsMode("audio") }
+                                }
+                                ProtocolChip("Видео", obfsMode == "video", enabled = !tunnelRunning) {
+                                    obfsMode = "video"
+                                    scope.launch { settingsStore.saveObfsMode("video") }
+                                }
                             }
                         }
                     }
@@ -735,8 +993,13 @@ fun SettingsTabContent(context: android.content.Context, scope: kotlinx.coroutin
                         )
                     }
 
-                    if (wdttLinkMode) {
+                    AnimatedVisibility(
+                        visible = wdttLinkMode,
+                        enter = fadeIn(tween(190)) + expandVertically(tween(300), expandFrom = Alignment.Top),
+                        exit = fadeOut(tween(190)) + shrinkVertically(tween(300), shrinkTowards = Alignment.Top)
+                    ) {
                         Column {
+                            Spacer(Modifier.height(4.dp))
                             var linkText by remember(wdttLink) { mutableStateOf(wdttLink) }
                             OutlinedTextField(
                                 value = linkText,
@@ -757,85 +1020,163 @@ fun SettingsTabContent(context: android.content.Context, scope: kotlinx.coroutin
                         }
                     }
                 }
-            }
 
         
         val tunnelSecretsMissing = savedConnectionPassword.isBlank()
 
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        AnimatedVisibility(
+            visible = !wdttLinkMode,
+            enter = fadeIn(tween(190)) + expandVertically(tween(300), expandFrom = Alignment.Top),
+            exit = fadeOut(tween(190)) + shrinkVertically(tween(300), shrinkTowards = Alignment.Top)
         ) {
-            if (!wdttLinkMode) {
-                OutlinedButton(
-                    onClick = { showSecretsDialog = true },
-                    modifier = Modifier.weight(1f).height(52.dp),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        containerColor = if (tunnelSecretsMissing) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.surface,
-                        contentColor = if (tunnelSecretsMissing) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onSurface
-                    ),
-                    border = BorderStroke(
-                        1.dp,
-                        if (tunnelSecretsMissing) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
-                    )
+            Column {
+            Spacer(Modifier.height(12.dp))
+            OutlinedButton(
+                onClick = { showSecretsDialog = true },
+                modifier = Modifier.fillMaxWidth().height(52.dp),
+                shape = RoundedCornerShape(16.dp),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    containerColor = if (tunnelSecretsMissing) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.surface,
+                    contentColor = if (tunnelSecretsMissing) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onSurface
+                ),
+                border = BorderStroke(
+                    1.dp,
+                    if (tunnelSecretsMissing) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
+                )
+            ) {
+                Icon(imageVector = Icons.Default.Key, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Секреты", fontWeight = FontWeight.SemiBold, maxLines = 1)
+            }
+            }
+        }
+
+        Spacer(Modifier.height(12.dp))
+        OutlinedButton(
+            onClick = { exceptionsOpen = true },
+            modifier = Modifier.fillMaxWidth().height(52.dp),
+            shape = RoundedCornerShape(16.dp),
+            colors = ButtonDefaults.outlinedButtonColors(
+                containerColor = MaterialTheme.colorScheme.surface,
+                contentColor = MaterialTheme.colorScheme.onSurface
+            ),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f))
+        ) {
+            Icon(imageVector = Icons.Default.FilterList, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("Исключения для приложений", fontWeight = FontWeight.SemiBold, maxLines = 1)
+        }
+
+        Spacer(Modifier.height(12.dp))
+        AppSectionCard(
+            contentPadding = PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text("Профиль", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                listOf(0, 1, 2).forEach { profile ->
+                    TechnicalChoice(
+                        label = "Пр. $profile",
+                        selected = activeProfile == profile,
+                        enabled = !tunnelRunning,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        scope.launch { settingsStore.saveActiveProfile(profile) }
+                    }
+                }
+                IconButton(
+                    onClick = { showClearProfileDialog = true },
+                    enabled = !tunnelRunning,
+                    modifier = Modifier.size(42.dp)
                 ) {
-                    Icon(imageVector = Icons.Default.Key, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Секреты", fontWeight = FontWeight.SemiBold, maxLines = 1)
+                    Icon(
+                        imageVector = Icons.Outlined.Delete,
+                        contentDescription = "Очистить текущий профиль",
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(22.dp)
+                    )
                 }
             }
 
-            val buttonColor by animateColorAsState(
-                targetValue = if (tunnelRunning) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
-                animationSpec = tween(400),
-                label = "btn_color"
-            )
-            val buttonContentColor by animateColorAsState(
-                targetValue = if (tunnelRunning) MaterialTheme.colorScheme.onError else MaterialTheme.colorScheme.onPrimary,
-                animationSpec = tween(400),
-                label = "btn_content_color"
-            )
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
 
-            Button(
-                onClick = {
-                    if (tunnelRunning) {
-                        context.startService(
-                            Intent(context, TunnelService::class.java).apply { action = "STOP" }
+            Text("Браузерный профиль", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                listOf("chrome" to "Chrome", "safari" to "Safari", "firefox" to "Firefox").forEach { (id, label) ->
+                    TechnicalChoice(
+                        label = label,
+                        selected = activeFingerprint == id,
+                        enabled = !tunnelRunning,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        scope.launch { settingsStore.saveFingerprint(id) }
+                    }
+                }
+            }
+
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+
+            Text("Резервные VK Client IDs", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            val selectedClientIds = activeClientIds.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+            listOf("8202606", "6287487").forEach { id ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(
+                            checked = id in selectedClientIds,
+                            enabled = !tunnelRunning,
+                            onCheckedChange = { checked ->
+                                val updated = if (checked) {
+                                    (selectedClientIds + id).distinct()
+                                } else {
+                                    selectedClientIds - id
+                                }
+                                if (updated.isNotEmpty()) {
+                                    scope.launch { settingsStore.saveActiveClientIds(updated.joinToString(",")) }
+                                }
+                            }
                         )
-                    } else {
-                        requestVpnAndStart()
+                        Text(id, style = MaterialTheme.typography.bodyMedium)
+                    }
+                    clientIdCheckResults[id]?.let { valid ->
+                        Icon(
+                            imageVector = if (valid) Icons.Default.Check else Icons.Default.Close,
+                            contentDescription = if (valid) "Доступен" else "Недоступен",
+                            tint = if (valid) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+            }
+            OutlinedButton(
+                onClick = {
+                    scope.launch {
+                        isCheckingClientIds = true
+                        val results = withContext(Dispatchers.IO) {
+                            listOf("8202606", "6287487").associateWith(::checkVkClientId)
+                        }
+                        val json = org.json.JSONObject()
+                        results.forEach { (id, valid) -> json.put(id, valid) }
+                        settingsStore.saveClientIdCheckResults(json.toString())
+                        isCheckingClientIds = false
                     }
                 },
-                enabled = (isValid && !cooldownActive) || tunnelRunning,
-                modifier = Modifier
-                    .weight(1f)
-                    .height(52.dp),
-                shape = RoundedCornerShape(16.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = buttonColor,
-                    contentColor = buttonContentColor
-                )
+                enabled = !isCheckingClientIds,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp)
             ) {
-                Icon(
-                    imageVector = if (tunnelRunning) Icons.Default.Stop else Icons.Default.PowerSettingsNew,
-                    contentDescription = null,
-                    modifier = Modifier.size(20.dp)
-                )
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    text = when {
-                        tunnelRunning -> "Остановить"
-                        cooldownActive -> "Подождите..."
-                        else -> "Подключить"
-                    },
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1
-                )
+                Text(if (isCheckingClientIds) "Проверка…" else "Проверить Client IDs")
             }
         }
         
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(28.dp))
         Text(
             text = "Для мобильных сетей.\nЕсли не работает режим \"Вызов\", попробуйте \"Капча\". Если автокапча не работает, попробуйте ручную. Маскировка сильно роли не играет.",
             style = MaterialTheme.typography.bodySmall,
@@ -843,7 +1184,281 @@ fun SettingsTabContent(context: android.content.Context, scope: kotlinx.coroutin
             textAlign = androidx.compose.ui.text.style.TextAlign.Center,
             modifier = Modifier.fillMaxWidth()
         )
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
+            }
+        }
+            }
+        } else Box(modifier = Modifier.fillMaxSize()) {
+            TunnelDashboard(
+                peer = if (wdttLinkMode) wdttLink.removePrefix("wdtt://").substringBefore(":").ifBlank { "Не указан" }
+                    else peerInput.ifBlank { "Не указан" },
+                mode = if (useVKCallsAuth) "Вызов" else "Капча",
+                obfuscation = if (obfsMode == "video") "Видео" else "Аудио",
+                workers = currentWorkers.toInt(),
+                tunnelRunning = tunnelRunning,
+                tunnelVerified = tunnelRunning && !tunnelConfig.isNullOrBlank(),
+                cooldownActive = cooldownActive,
+                enabled = (isValid && !cooldownActive) || tunnelRunning,
+                modifier = Modifier.padding(bottom = mainPageBottomPadding),
+                onOpenSettings = { settingsOpen = true },
+                onOpenDeploy = { deployOpen = true },
+                onToggleTunnel = {
+                    if (tunnelRunning) {
+                        context.startService(
+                            Intent(context, TunnelService::class.java).apply { action = "STOP" }
+                        )
+                    } else {
+                        requestVpnAndStart()
+                    }
+                }
+            )
+            mainPageOverlay()
+        }
     }
+        }
+    }
+}
+
+@Composable
+private fun TunnelDashboard(
+    peer: String,
+    mode: String,
+    obfuscation: String,
+    workers: Int,
+    tunnelRunning: Boolean,
+    tunnelVerified: Boolean,
+    cooldownActive: Boolean,
+    enabled: Boolean,
+    modifier: Modifier = Modifier,
+    onOpenSettings: () -> Unit,
+    onOpenDeploy: () -> Unit,
+    onToggleTunnel: () -> Unit
+) {
+    val logoScale by animateFloatAsState(
+        targetValue = if (tunnelRunning) 1.12f else 0.94f,
+        animationSpec = tween(
+            durationMillis = 650,
+            easing = androidx.compose.animation.core.CubicBezierEasing(0.22f, 1f, 0.36f, 1f)
+        ),
+        label = "dashboard_logo_scale"
+    )
+    val verifiedReveal by animateFloatAsState(
+        targetValue = if (tunnelVerified) 1f else 0f,
+        animationSpec = if (tunnelVerified) {
+            tween(durationMillis = 620, easing = androidx.compose.animation.core.FastOutSlowInEasing)
+        } else {
+            androidx.compose.animation.core.snap()
+        },
+        label = "dashboard_verified_reveal"
+    )
+    val dashboardScale = 1.12f
+    val density = LocalDensity.current
+
+    Column(
+        modifier = modifier.fillMaxSize().padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            IconButton(onClick = onOpenSettings, modifier = Modifier.size(48.dp)) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_settings),
+                    contentDescription = "Настройки туннеля",
+                    tint = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.size(28.dp)
+                )
+            }
+            IconButton(onClick = onOpenDeploy, modifier = Modifier.size(48.dp)) {
+                Icon(
+                    imageVector = Icons.Filled.CloudUpload,
+                    contentDescription = "Установка на сервер",
+                    tint = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.size(28.dp)
+                )
+            }
+        }
+
+        Spacer(Modifier.height(48.dp))
+
+        CompositionLocalProvider(
+            LocalDensity provides Density(density.density, density.fontScale * dashboardScale)
+        ) {
+            Surface(
+                onClick = onToggleTunnel,
+                enabled = enabled,
+                shape = CircleShape,
+                color = Color(0xFF4B4F57),
+                shadowElevation = 12.dp,
+                modifier = Modifier
+                    .size(164.dp * dashboardScale)
+                    .scale(logoScale)
+            ) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Image(
+                        painter = painterResource(R.drawable.ic_vpn_key_gradient),
+                        contentDescription = if (tunnelRunning) "Остановить туннель" else "Подключить туннель",
+                        modifier = Modifier.size(112.dp * dashboardScale),
+                        colorFilter = ColorFilter.tint(Color(0xFFE2E5EA)),
+                        alpha = 0.92f
+                    )
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .drawWithContent {
+                                if (verifiedReveal > 0f) {
+                                    val radius = size.minDimension / 2f * verifiedReveal
+                                    val revealPath = Path().apply {
+                                        addOval(
+                                            Rect(
+                                                left = center.x - radius,
+                                                top = center.y - radius,
+                                                right = center.x + radius,
+                                                bottom = center.y + radius
+                                            )
+                                        )
+                                    }
+                                    clipPath(revealPath) { this@drawWithContent.drawContent() }
+                                }
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Canvas(modifier = Modifier.fillMaxSize()) {
+                            drawCircle(
+                                color = Color(0xFF245A9B),
+                                radius = size.minDimension / 2f,
+                                center = center
+                            )
+                        }
+                        Image(
+                            painter = painterResource(R.drawable.ic_vpn_key_gradient),
+                            contentDescription = null,
+                            modifier = Modifier.size(112.dp * dashboardScale)
+                        )
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(18.dp * dashboardScale))
+
+            Text(
+                text = when {
+                    tunnelVerified -> "Туннель подключён"
+                    tunnelRunning -> "Подключение…"
+                    cooldownActive -> "Подождите…"
+                    enabled -> "Готов к подключению"
+                    else -> "Заполните настройки туннеля"
+                },
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Bold,
+                color = if (tunnelVerified) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            Spacer(Modifier.height(10.dp * dashboardScale))
+
+            AppSectionCard(
+                modifier = Modifier.fillMaxWidth(0.74f * dashboardScale),
+                contentPadding = PaddingValues(
+                    horizontal = 16.dp * dashboardScale,
+                    vertical = 13.dp * dashboardScale
+                ),
+                verticalArrangement = Arrangement.spacedBy(10.dp * dashboardScale)
+            ) {
+                Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("IP сервера", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(
+                        peer,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f))
+                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    DashboardMetric("Режим", mode, Modifier.weight(1f))
+                    VerticalDivider(
+                        modifier = Modifier.height(38.dp * dashboardScale),
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f)
+                    )
+                    DashboardMetric("Мощность", workers.toString(), Modifier.weight(1f))
+                    VerticalDivider(
+                        modifier = Modifier.height(38.dp * dashboardScale),
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f)
+                    )
+                    DashboardMetric("Скрытие", obfuscation, Modifier.weight(1f))
+                }
+            }
+        }
+        Spacer(Modifier.weight(1f))
+    }
+}
+
+@Composable
+private fun DashboardMetric(
+    label: String,
+    value: String,
+    modifier: Modifier = Modifier
+) {
+    Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(value, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, maxLines = 1)
+    }
+}
+
+@Composable
+private fun TechnicalChoice(
+    label: String,
+    selected: Boolean,
+    enabled: Boolean,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    Surface(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = modifier,
+        shape = RoundedCornerShape(12.dp),
+        color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
+        border = BorderStroke(
+            1.dp,
+            if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
+        )
+    ) {
+        Box(modifier = Modifier.padding(vertical = 10.dp, horizontal = 4.dp), contentAlignment = Alignment.Center) {
+            Text(
+                label,
+                style = MaterialTheme.typography.bodySmall,
+                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                maxLines = 1
+            )
+        }
+    }
+}
+
+private fun checkVkClientId(appId: String): Boolean {
+    repeat(2) {
+        try {
+            val url = java.net.URL("https://oauth.vk.com/authorize?client_id=$appId&display=mobile&response_type=token")
+            val conn = url.openConnection() as java.net.HttpURLConnection
+            conn.requestMethod = "GET"
+            conn.connectTimeout = 5000
+            conn.readTimeout = 5000
+            val code = conn.responseCode
+            val stream = if (code >= 400) conn.errorStream else conn.inputStream
+            val response = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
+            return !(response.contains("\"error\"") &&
+                (response.contains("invalid_client") || response.contains("invalid_request")))
+        } catch (_: Exception) {
+            // Повторяем один раз при временной сетевой ошибке.
+        }
+    }
+    return false
 }
 
 @Composable

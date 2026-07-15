@@ -417,6 +417,37 @@ class SettingsStore(context: Context) {
         }
     }
 
+    suspend fun clearActiveProfile() {
+        dataStore.edit { prefs ->
+            val profile = (prefs[ACTIVE_PROFILE] ?: 0).coerceIn(0, 2)
+
+            listOf(
+                PEER, VK_HASHES, SECONDARY_VK_HASH, PROTOCOL, SNI, USER_AGENT,
+                DEPLOY_IP, DEPLOY_LOGIN, DEPLOY_PASSWORD, DEPLOY_PASSWORD_ENCRYPTED,
+                DEPLOY_SSH_PORT, DEPLOY_DNS1, DEPLOY_DNS2,
+                DEPLOY_SSH_PUBLIC_KEY, DEPLOY_SSH_PUBLIC_KEY_ENCRYPTED,
+                DEPLOY_SSH_PRIVATE_KEY, DEPLOY_SSH_PRIVATE_KEY_ENCRYPTED,
+                DEPLOY_SSH_KEY_PASSPHRASE, DEPLOY_SSH_KEY_PASSPHRASE_ENCRYPTED,
+                EXCLUDED_APPS, CONNECTION_PASSWORD, CONNECTION_PASSWORD_ENCRYPTED,
+                DEPLOY_MAIN_PASSWORD, DEPLOY_MAIN_PASSWORD_ENCRYPTED,
+                DEPLOY_ADMIN_ID, DEPLOY_ADMIN_ID_ENCRYPTED,
+                DEPLOY_BOT_TOKEN, DEPLOY_BOT_TOKEN_ENCRYPTED,
+                PROXY_MODE, PROXY_HOST, VK_AUTH_MODE, OBFS_MODE,
+                CAPTCHA_MODE, CAPTCHA_SOLVE_METHOD, CAPTCHA_WBV_SOLVE_METHOD,
+                WDTT_LINK, SELECTED_FINGERPRINT, ACTIVE_CLIENT_IDS
+            ).forEach { key -> prefs.remove(getProfileKey(key, profile)) }
+
+            listOf(
+                TOTAL_WORKERS, LISTEN_PORT, SERVER_DTLS_PORT, SERVER_WG_PORT, PROXY_PORT
+            ).forEach { key -> prefs.remove(getProfileKey(key, profile)) }
+
+            listOf(
+                MANUAL_PORTS_ENABLED, NO_DTLS, NO_DNS, IS_WHITELIST,
+                WDTT_LINK_MODE, DETAILED_LOGS, DEPLOY_SSH_KEY_AUTH
+            ).forEach { key -> prefs.remove(getProfileKey(key, profile)) }
+        }
+    }
+
     suspend fun saveShowSystemApps(enabled: Boolean) {
         dataStore.edit { prefs ->
             prefs[SHOW_SYSTEM_APPS] = enabled
