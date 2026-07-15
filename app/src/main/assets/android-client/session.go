@@ -91,7 +91,6 @@ func RunSession(
 	// The zero-value stdnet.Net provides everything this UDP client uses
 	// without performing the unnecessary interface enumeration.
 	tc, err := turn.NewClient(&turn.ClientConfig{
-		STUNServerAddr:         turnAddr,
 		TURNServerAddr:         turnAddr,
 		Conn:                   turnConn,
 		Net:                    new(stdnet.Net),
@@ -130,22 +129,6 @@ func RunSession(
 
 	sessCtx, sessCancel := context.WithCancel(ctx)
 	defer sessCancel()
-
-	var sessionWg sync.WaitGroup
-	sessionWg.Add(1)
-	go func() {
-		defer sessionWg.Done()
-		t := time.NewTicker(10 * time.Second)
-		defer t.Stop()
-		for {
-			select {
-			case <-sessCtx.Done():
-				return
-			case <-t.C:
-				tc.SendBindingRequest()
-			}
-		}
-	}()
 
 	var relayWg sync.WaitGroup
 	relayWg.Add(2)
@@ -385,7 +368,6 @@ func RunSession(
 	proxyWg.Wait()
 	sessCancel()
 	relayWg.Wait()
-	sessionWg.Wait()
 	_ = pipeA.Close()
 	_ = pipeB.Close()
 	log.Printf("[СЕССИЯ #%d] Завершена", sessionID)
