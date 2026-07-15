@@ -35,12 +35,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import kotlinx.coroutines.launch
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Cloud
-import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material.icons.filled.VpnKey
 import androidx.compose.material.icons.outlined.Cloud
-import androidx.compose.material.icons.outlined.FilterList
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Terminal
 import androidx.compose.material.icons.outlined.VpnKey
@@ -69,7 +67,6 @@ import com.wdtt.client.ui.FloatingToolbar
 import com.wdtt.client.ui.LogsTab
 import com.wdtt.client.ui.SettingsTab
 import com.wdtt.client.ui.DeployTab
-import com.wdtt.client.ui.ExceptionsTab
 import com.wdtt.client.ui.InfoTab
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -126,8 +123,6 @@ class MainActivity : ComponentActivity() {
             val themeMode by settingsStore.themeMode.collectAsStateWithLifecycle(initialValue = "system")
             val isDynamicColor by settingsStore.isDynamicColor.collectAsStateWithLifecycle(initialValue = false)
             val themePalette by settingsStore.themePalette.collectAsStateWithLifecycle(initialValue = "indigo")
-            val activeFingerprint by settingsStore.selectedFingerprint.collectAsStateWithLifecycle(initialValue = "firefox")
-            val activeClientIds by settingsStore.activeClientIds.collectAsStateWithLifecycle(initialValue = "8202606,6287487")
             val scope = rememberCoroutineScope()
 
             WDTTTheme(themeMode = themeMode, dynamicColor = isDynamicColor, themePalette = themePalette) {
@@ -146,14 +141,6 @@ class MainActivity : ComponentActivity() {
                     currentPalette = themePalette,
                     onPaletteChange = { palette ->
                         scope.launch { settingsStore.saveThemePalette(palette) }
-                    },
-                    activeFingerprint = activeFingerprint,
-                    onFingerprintChange = { fp ->
-                        scope.launch { settingsStore.saveFingerprint(fp) }
-                    },
-                    activeClientIds = activeClientIds,
-                    onClientIdsChange = { ids ->
-                        scope.launch { settingsStore.saveActiveClientIds(ids) }
                     }
                 )
             }
@@ -208,11 +195,9 @@ private data class NavItem(
 )
 
 private val navItems = listOf(
-    NavItem(0, "Туннель", Icons.Filled.VpnKey, Icons.Outlined.VpnKey),
-    NavItem(1, "Деплой", Icons.Filled.Cloud, Icons.Outlined.Cloud),
-    NavItem(2, "Исключ.", Icons.Filled.FilterList, Icons.Outlined.FilterList),
-    NavItem(3, "Логи", Icons.Filled.Terminal, Icons.Outlined.Terminal),
-    NavItem(4, "Инфо", Icons.Filled.Info, Icons.Outlined.Info),
+    NavItem(0, "Подключение", Icons.Filled.VpnKey, Icons.Outlined.VpnKey),
+    NavItem(1, "Логи", Icons.Filled.Terminal, Icons.Outlined.Terminal),
+    NavItem(2, "Инфо", Icons.Filled.Info, Icons.Outlined.Info),
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -224,11 +209,7 @@ fun MainScreen(
     isDynamicColor: Boolean = false,
     onDynamicColorChange: (Boolean) -> Unit = {},
     currentPalette: String = "indigo",
-    onPaletteChange: (String) -> Unit = {},
-    activeFingerprint: String = "chrome",
-    onFingerprintChange: (String) -> Unit = {},
-    activeClientIds: String = "8202606,6287487",
-    onClientIdsChange: (String) -> Unit = {}
+    onPaletteChange: (String) -> Unit = {}
 ) {
     val unreadErrors by TunnelManager.unreadErrorCount.collectAsStateWithLifecycle()
     val tunnelRunning by TunnelManager.running.collectAsStateWithLifecycle()
@@ -236,9 +217,8 @@ fun MainScreen(
     val context = LocalContext.current
     val density = LocalDensity.current
     val scope = rememberCoroutineScope()
-    val activeProfile by settingsStore.activeProfile.collectAsStateWithLifecycle(initialValue = 0)
-    val wdttLinkMode by settingsStore.wdttLinkMode.collectAsStateWithLifecycle(initialValue = false)
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
+    var nestedPageKind by rememberSaveable { mutableIntStateOf(0) }
     var dragTargetIndex by remember { mutableIntStateOf(-1) }
     var dragProgress by remember { mutableFloatStateOf(0f) }
     val updateCheckIntervalHours by settingsStore.updateCheckIntervalHours.collectAsStateWithLifecycle(
@@ -249,29 +229,37 @@ fun MainScreen(
     val safeBottomInset = with(density) { WindowInsets.safeDrawing.getBottom(density).toDp() }
     val navOverlayReserve = safeBottomInset + when (selectedTab) {
         0 -> 94.dp
-        1 -> 78.dp
-        4 -> 78.dp
+        2 -> 78.dp
         else -> 96.dp
     }
 
-    val activeNavItems = remember(wdttLinkMode) {
-        if (wdttLinkMode) {
-            navItems.filter { it.id != 1 }
-        } else {
-            navItems
-        }
-    }
+    val activeNavItems = navItems
     val actionsExpanded = rememberSaveable { mutableStateOf(false) }
     val projectExpanded = rememberSaveable { mutableStateOf(false) }
 
-    LaunchedEffect(wdttLinkMode) {
-        if (wdttLinkMode && selectedTab == 1) {
-            selectedTab = 0
-        }
+    val navigationBar: @Composable BoxScope.() -> Unit = {
+        ProxyNavigationBar(
+            navItems = activeNavItems,
+            selectedTab = selectedTab,
+            dragTargetIndex = dragTargetIndex,
+            dragProgress = dragProgress,
+            unreadErrors = unreadErrors,
+            tunnelRunning = tunnelRunning,
+            onTabSelected = { index ->
+                if (selectedTab != index) {
+                    view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                    selectedTab = index
+                    if (index == 1) TunnelManager.clearUnreadErrors()
+                }
+                dragTargetIndex = -1
+                dragProgress = 0f
+            },
+            modifier = Modifier.align(Alignment.BottomCenter)
+        )
     }
 
     LaunchedEffect(selectedTab) {
-        if (selectedTab == 3) TunnelManager.clearUnreadErrors()
+        if (selectedTab == 1) TunnelManager.clearUnreadErrors()
     }
 
     LaunchedEffect(updateCheckIntervalHours) {
@@ -336,7 +324,8 @@ fun MainScreen(
                     .fillMaxSize()
                     .padding(padding)
                     .consumeWindowInsets(padding)
-                    .pointerInput(selectedTab, wdttLinkMode) {
+                    .pointerInput(selectedTab, nestedPageKind) {
+                        if (nestedPageKind != 0) return@pointerInput
                         var totalDrag = 0f
                         detectHorizontalDragGestures(
                             onDragStart = {
@@ -351,7 +340,7 @@ fun MainScreen(
                             onDragEnd = {
                                 if (dragTargetIndex in activeNavItems.indices && dragProgress >= 0.5f) {
                                     selectedTab = activeNavItems[dragTargetIndex].id
-                                    if (selectedTab == 3) TunnelManager.clearUnreadErrors()
+                                    if (selectedTab == 1) TunnelManager.clearUnreadErrors()
                                 }
                                 dragTargetIndex = -1
                                 dragProgress = 0f
@@ -384,57 +373,38 @@ fun MainScreen(
                         fadeIn(tween(300)) togetherWith fadeOut(tween(225))
                     },
                     modifier = Modifier
-                        .fillMaxSize()
-                        .padding(bottom = navOverlayReserve),
+                        .fillMaxSize(),
                     label = "tab_content"
                 ) { tab ->
                     when (tab) {
-                        0 -> SettingsTab()
-                        1 -> if (!wdttLinkMode) DeployTab() else Spacer(modifier = Modifier.fillMaxSize())
-                        2 -> ExceptionsTab()
-                        3 -> LogsTab()
-                        4 -> InfoTab(actionsExpandedState = actionsExpanded, projectExpandedState = projectExpanded)
+                        0 -> SettingsTab(
+                            mainPageBottomPadding = navOverlayReserve,
+                            onNestedPageChanged = { nestedPageKind = it },
+                            mainPageOverlay = navigationBar
+                        )
+                        1 -> Box(Modifier.fillMaxSize()) {
+                            Box(Modifier.fillMaxSize().padding(bottom = navOverlayReserve)) { LogsTab() }
+                            navigationBar()
+                        }
+                        2 -> Box(Modifier.fillMaxSize()) {
+                            Box(Modifier.fillMaxSize().padding(bottom = navOverlayReserve)) {
+                                InfoTab(actionsExpandedState = actionsExpanded, projectExpandedState = projectExpanded)
+                            }
+                            navigationBar()
+                        }
                     }
                 }
-
-                ProxyNavigationBar(
-                    navItems = activeNavItems,
-                    selectedTab = selectedTab,
-                    dragTargetIndex = dragTargetIndex,
-                    dragProgress = dragProgress,
-                    unreadErrors = unreadErrors,
-                    tunnelRunning = tunnelRunning,
-                    onTabSelected = { index ->
-                        if (selectedTab != index) {
-                            view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
-                            selectedTab = index
-                            if (index == 3) TunnelManager.clearUnreadErrors()
-                        }
-                        dragTargetIndex = -1
-                        dragProgress = 0f
-                    },
-                    modifier = Modifier.align(Alignment.BottomCenter)
-                )
             }
         }
 
         
         FloatingToolbar(
-            settingsStore = settingsStore,
-            activeProfile = activeProfile,
-            onActiveProfileChange = { profile ->
-                scope.launch { settingsStore.saveActiveProfile(profile) }
-            },
             currentTheme = themeMode,
             onThemeChange = onThemeChange,
             isDynamicColor = isDynamicColor,
             onDynamicColorChange = onDynamicColorChange,
             currentPalette = currentPalette,
-            onPaletteChange = onPaletteChange,
-            activeFingerprint = activeFingerprint,
-            onFingerprintChange = onFingerprintChange,
-            activeClientIds = activeClientIds,
-            onClientIdsChange = onClientIdsChange
+            onPaletteChange = onPaletteChange
         )
     }
 
@@ -585,7 +555,7 @@ private fun ProxyNavigationBar(
                                     modifier = Modifier.size(22.dp),
                                     tint = iconColor
                                 )
-                                if (item.id == 3 && unreadErrors > 0) {
+                                if (item.id == 1 && unreadErrors > 0) {
                                     Badge(
                                         containerColor = if (tunnelRunning) colors.primary else WDTTColors.warning,
                                         contentColor = colors.onPrimary,

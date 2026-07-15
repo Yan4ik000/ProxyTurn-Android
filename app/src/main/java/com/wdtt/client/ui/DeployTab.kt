@@ -3,6 +3,13 @@ package com.wdtt.client.ui
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
@@ -39,7 +46,7 @@ import com.wdtt.client.SettingsStore
 import com.wdtt.client.TunnelManager
 import com.wdtt.client.WDTTColors
 import com.wdtt.client.ui.components.verticalScrollEdgeFade
-import com.wdtt.client.ui.dialogs.DeploySecretsDialog
+import com.wdtt.client.ui.dialogs.DeploySecretsPage
 import com.wdtt.client.ui.dialogs.UninstallConfirmDialog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -85,7 +92,7 @@ fun DeployTab() {
     val savedSshPrivateKey by settingsStore.deploySshPrivateKey.collectAsStateWithLifecycle(initialValue = "")
     val savedSshKeyPassphrase by settingsStore.deploySshKeyPassphrase.collectAsStateWithLifecycle(initialValue = "")
 
-    var showSecretsDialog by remember { mutableStateOf(false) }
+    var showSecretsPage by rememberSaveable { mutableStateOf(false) }
     var showUninstallDialog by remember { mutableStateOf(false) }
 
     var showSuccessBanner by rememberSaveable { mutableStateOf(false) }
@@ -121,7 +128,39 @@ fun DeployTab() {
         label = "progress"
     )
 
-    Column(
+    BackHandler(enabled = showSecretsPage) { showSecretsPage = false }
+
+    AnimatedContent(
+        targetState = showSecretsPage,
+        transitionSpec = {
+            if (targetState) {
+                (slideInHorizontally(tween(320)) { it / 2 } + fadeIn(tween(260))) togetherWith
+                    (slideOutHorizontally(tween(280)) { -it / 3 } + fadeOut(tween(180)))
+            } else {
+                (slideInHorizontally(tween(320)) { -it / 2 } + fadeIn(tween(260))) togetherWith
+                    (slideOutHorizontally(tween(280)) { it / 3 } + fadeOut(tween(180)))
+            }
+        },
+        label = "deploy_secrets_page"
+    ) { showSecrets ->
+        if (showSecrets) {
+            DeploySecretsPage(
+                settingsStore = settingsStore,
+                initialMainPass = savedMainPass,
+                initialAdminId = savedAdminId,
+                initialBotToken = savedBotToken,
+                initialSshPort = savedSshPort,
+                manualPortsEnabled = savedManualPorts,
+                initialServerDtlsPort = savedServerDtlsPort.toString(),
+                initialServerWgPort = savedServerWgPort.toString(),
+                sshKeyAuth = savedSshKeyAuth,
+                initialSshPublicKey = savedSshPublicKey,
+                initialSshPrivateKey = savedSshPrivateKey,
+                initialSshKeyPassphrase = savedSshKeyPassphrase,
+                onSaved = { _, _ -> },
+                onBack = { showSecretsPage = false }
+            )
+        } else Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(16.dp)
@@ -265,26 +304,6 @@ fun DeployTab() {
             }
         }
 
-        if (showSecretsDialog) {
-            DeploySecretsDialog(
-                settingsStore = settingsStore,
-                initialMainPass = savedMainPass,
-                initialAdminId = savedAdminId,
-                initialBotToken = savedBotToken,
-                initialSshPort = savedSshPort,
-                manualPortsEnabled = savedManualPorts,
-                initialServerDtlsPort = savedServerDtlsPort.toString(),
-                initialServerWgPort = savedServerWgPort.toString(),
-                sshKeyAuth = savedSshKeyAuth,
-                initialSshPublicKey = savedSshPublicKey,
-                initialSshPrivateKey = savedSshPrivateKey,
-                initialSshKeyPassphrase = savedSshKeyPassphrase,
-                onSaved = { _, _ -> },
-                onDismiss = { showSecretsDialog = false }
-            )
-        }
-
-        
         if (isDeploying) {
             AppSectionCard(
                 contentPadding = PaddingValues(16.dp),
@@ -343,7 +362,7 @@ fun DeployTab() {
             if (savedManualPorts) add("Порты")
         }.joinToString(", ")
         OutlinedButton(
-            onClick = { showSecretsDialog = true },
+            onClick = { showSecretsPage = true },
             modifier = Modifier.fillMaxWidth().height(48.dp),
             shape = RoundedCornerShape(16.dp),
             colors = ButtonDefaults.outlinedButtonColors(
@@ -479,6 +498,7 @@ fun DeployTab() {
                     )
                 }
             }
+        }
         }
     }
 }
