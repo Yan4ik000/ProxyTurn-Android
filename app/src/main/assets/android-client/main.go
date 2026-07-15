@@ -286,6 +286,7 @@ func main() {
 
 	disp := NewDispatcher(ctx, localConn, stats)
 	defer disp.Shutdown()
+	heartbeats := NewHeartbeatCoordinator(ctx)
 
 	configCh := make(chan string, 1)
 	configDone := make(chan struct{})
@@ -367,7 +368,7 @@ func main() {
 		wg.Add(1)
 		go func(groupID int, isFirstGroup bool, configChan chan<- string, workerIds []int, startHashIndex int, waitC, waitS <-chan struct{}, sigC, sigS chan<- struct{}) {
 			defer wg.Done()
-			WorkerGroup(ctx, groupID, startHashIndex, tp, peer, disp, localPort,
+			WorkerGroup(ctx, groupID, startHashIndex, tp, peer, disp, heartbeats, localPort,
 				isFirstGroup, configChan, workerIds, &pauseFlag, *deviceID, *connPassword, stats, waitC, sigC, waitS, sigS)
 		}(gID, isFirst, cc, ids, g, myWaitCreds, myWaitSpawn, mySignalCreds, mySignalSpawn)
 	}

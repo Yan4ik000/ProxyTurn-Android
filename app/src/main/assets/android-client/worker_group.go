@@ -23,6 +23,7 @@ func WorkerGroup(
 	tp *TurnParams,
 	peer *net.UDPAddr,
 	d *Dispatcher,
+	heartbeats *HeartbeatCoordinator,
 	localPort string,
 	getConfig bool,
 	configCh chan<- string,
@@ -150,7 +151,7 @@ func WorkerGroup(
 				credsSnapshot.TurnURLs = cloneStringSlice(creds.TurnURLs)
 				credsMu.RUnlock()
 
-				configDelivered, sessErr := RunSession(ctx, tp, peer, d, localPort,
+				configDelivered, sessErr := RunSession(ctx, tp, peer, d, heartbeats, localPort,
 					getConf, cc, wid, &credsSnapshot, deviceID, password, stats)
 
 				if getConf {

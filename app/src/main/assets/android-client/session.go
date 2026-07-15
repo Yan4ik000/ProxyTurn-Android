@@ -8,6 +8,7 @@ import (
 	"net"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/cbeuw/connutil"
@@ -37,6 +38,7 @@ func RunSession(
 	tp *TurnParams,
 	peer *net.UDPAddr,
 	d *Dispatcher,
+	heartbeats *HeartbeatCoordinator,
 	localPort string,
 	getConfig bool,
 	configCh chan<- string,
@@ -283,8 +285,12 @@ func RunSession(
 	d.Register(slot)
 	defer d.Unregister(slot)
 
+	heartbeatSignal := make(chan struct{}, 1)
+	heartbeatID := heartbeats.Register(heartbeatSignal)
+	defer heartbeats.Unregister(heartbeatID)
+
 	var proxyWg sync.WaitGroup
-	proxyWg.Add(3)
+	proxyWg.Add(2)
 
 	stopDTLS := context.AfterFunc(sessCtx, func() {
 		_ = dtlsConn.SetDeadline(time.Now())
@@ -293,38 +299,43 @@ func RunSession(
 
 	go func() {
 		defer proxyWg.Done()
-		t := time.NewTicker(keepaliveInterval)
-		defer t.Stop()
+		defer sessCancel()
 		ping := []byte{keepaliveByte}
+		var lastPayloadWrite atomic.Int64
+		writePayload := func(pkt []byte) bool {
+			_ = dtlsConn.SetWriteDeadline(time.Now().Add(sessionReadTimeout))
+			_, writeErr := dtlsConn.Write(pkt)
+			putPktBuf(pkt)
+			if writeErr != nil {
+				log.Printf("[ВОРКЕР #%d] Ошибка Writer: %v", sessionID, writeErr)
+				return false
+			}
+			lastPayloadWrite.Store(time.Now().UnixNano())
+			return true
+		}
 		for {
 			select {
-			case <-sessCtx.Done():
-				return
-			case <-t.C:
-				_ = dtlsConn.SetWriteDeadline(time.Now().Add(5 * time.Second))
-				if _, err := dtlsConn.Write(ping); err != nil {
+			case pkt, ok := <-slot.SendCh:
+				if !ok || !writePayload(pkt) {
 					return
 				}
+				continue
+			default:
 			}
-		}
-	}()
-
-	go func() {
-		defer proxyWg.Done()
-		defer sessCancel()
-		for {
 			select {
 			case <-sessCtx.Done():
 				return
 			case pkt, ok := <-slot.SendCh:
-				if !ok {
+				if !ok || !writePayload(pkt) {
 					return
 				}
-				_ = dtlsConn.SetWriteDeadline(time.Now().Add(sessionReadTimeout))
-				_, writeErr := dtlsConn.Write(pkt)
-				putPktBuf(pkt)
-				if writeErr != nil {
-					log.Printf("[ВОРКЕР #%d] Ошибка Writer: %v", sessionID, writeErr)
+			case <-heartbeatSignal:
+				lastWrite := lastPayloadWrite.Load()
+				if lastWrite != 0 && time.Since(time.Unix(0, lastWrite)) < keepaliveInterval {
+					continue
+				}
+				_ = dtlsConn.SetWriteDeadline(time.Now().Add(5 * time.Second))
+				if _, err := dtlsConn.Write(ping); err != nil {
 					return
 				}
 			}
