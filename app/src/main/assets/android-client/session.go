@@ -11,7 +11,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/cbeuw/connutil"
 	"github.com/pion/dtls/v3"
 	"github.com/pion/dtls/v3/pkg/crypto/selfsign"
 	"github.com/pion/transport/v4/stdnet"
@@ -127,85 +126,28 @@ func RunSession(
 
 	log.Printf("[СЕССИЯ #%d] Relay: %s", sessionID, relay.LocalAddr())
 
-	pipeA, pipeB := connutil.AsyncPacketPipe()
-
 	sessCtx, sessCancel := context.WithCancel(ctx)
 	defer sessCancel()
 
-	var relayWg sync.WaitGroup
-	relayWg.Add(2)
-
 	useWrap := len(tp.WrapKey) == wrapKeyLen
-
-	var obfsCfg *ObfsConfig
-	var obfsWriteState *ObfsState
+	var dtlsPacketConn net.PacketConn = relay
 	if useWrap {
-		obfsCfg = NewObfsConfig(tp.ObfsMode)
-		obfsWriteState = NewObfsState()
+		dtlsPacketConn, err = newObfsPacketConn(
+			relay,
+			tp.WrapKey,
+			NewObfsConfig(tp.ObfsMode),
+			NewObfsState(),
+			sessionID,
+		)
+		if err != nil {
+			return false, fmt.Errorf("WRAP cipher: %w", err)
+		}
 	}
 
 	stopRelay := context.AfterFunc(sessCtx, func() {
 		_ = relay.SetDeadline(time.Now())
-		_ = pipeA.SetDeadline(time.Now())
 	})
 	defer stopRelay()
-
-	go func() {
-		defer relayWg.Done()
-		defer sessCancel()
-
-		readBufLen := readBufSize + 80
-		buf := make([]byte, readBufLen)
-		plain := make([]byte, readBufSize)
-		for {
-			n, _, readErr := relay.ReadFrom(buf)
-			if readErr != nil {
-				return
-			}
-			payload := buf[:n]
-			if useWrap {
-				if !obfsIsRTPPacket(payload) {
-					log.Printf("[СЕССИЯ #%d] OBFS unwrap: unexpected packet (n=%d)", sessionID, n)
-					continue
-				}
-				m, wrapErr := obfsUnwrapPacket(tp.WrapKey, payload, plain)
-				if wrapErr != nil {
-					log.Printf("[СЕССИЯ #%d] OBFS unwrap: %v (n=%d)", sessionID, wrapErr, n)
-					continue
-				}
-				payload = plain[:m]
-			}
-			if _, writeErr := pipeA.WriteTo(payload, peer); writeErr != nil {
-				return
-			}
-		}
-	}()
-
-	go func() {
-		defer relayWg.Done()
-		defer sessCancel()
-		b := make([]byte, readBufSize)
-		for {
-			n, _, readErr := pipeA.ReadFrom(b)
-			if readErr != nil {
-				return
-			}
-			out := b[:n]
-			if useWrap {
-				if obfsCfg != nil && obfsWriteState != nil {
-					wrapped, wrapErr := obfsWrapPacket(tp.WrapKey, out, obfsCfg, obfsWriteState)
-					if wrapErr != nil {
-						log.Printf("[СЕССИЯ #%d] OBFS wrap: %v", sessionID, wrapErr)
-						return
-					}
-					out = wrapped
-				}
-			}
-			if _, writeErr := relay.WriteTo(out, peer); writeErr != nil {
-				return
-			}
-		}
-	}()
 
 	cert, err := selfsign.GenerateSelfSigned()
 	if err != nil {
@@ -226,7 +168,7 @@ func RunSession(
 		ConnectionIDGenerator: dtls.OnlySendCIDGenerator(),
 	}
 
-	dtlsConn, err := dtls.Client(pipeB, peer, dtlsCfg)
+	dtlsConn, err := dtls.Client(dtlsPacketConn, peer, dtlsCfg)
 	if err != nil {
 		<-handshakeSem
 		return false, fmt.Errorf("DTLS клиент: %w", err)
@@ -378,9 +320,6 @@ func RunSession(
 
 	proxyWg.Wait()
 	sessCancel()
-	relayWg.Wait()
-	_ = pipeA.Close()
-	_ = pipeB.Close()
 	log.Printf("[СЕССИЯ #%d] Завершена", sessionID)
 	return configDelivered, nil
 }

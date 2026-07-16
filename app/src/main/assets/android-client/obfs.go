@@ -6,27 +6,15 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"sync"
 
 	"golang.org/x/crypto/chacha20poly1305"
 )
 
-var aeadCache sync.Map
-
-func getAEAD(key []byte) (cipher.AEAD, error) {
+func newObfsAEAD(key []byte) (cipher.AEAD, error) {
 	if len(key) != wrapKeyLen {
 		return nil, fmt.Errorf("obfs: key must be %d bytes", wrapKeyLen)
 	}
-	keyStr := string(key)
-	if val, ok := aeadCache.Load(keyStr); ok {
-		return val.(cipher.AEAD), nil
-	}
-	aead, err := chacha20poly1305.New(key)
-	if err != nil {
-		return nil, err
-	}
-	aeadCache.Store(keyStr, aead)
-	return aead, nil
+	return chacha20poly1305.New(key)
 }
 
 type ObfsConfig struct {
@@ -54,7 +42,6 @@ func NewObfsConfig(mode string) *ObfsConfig {
 }
 
 type ObfsState struct {
-	mu      sync.Mutex
 	initSeq uint16
 	initTs  uint32
 	count   uint64
@@ -70,32 +57,30 @@ func NewObfsState() *ObfsState {
 	}
 }
 
-func obfsBuildNonce(ssrc uint32, seq uint16, ts uint32) []byte {
-	n := make([]byte, 12)
-	binary.BigEndian.PutUint32(n[0:4], ssrc)
-	binary.BigEndian.PutUint16(n[4:6], seq)
-
-	binary.BigEndian.PutUint32(n[8:12], ts)
-	return n
+func obfsBuildNonce(dst *[12]byte, ssrc uint32, seq uint16, ts uint32) {
+	binary.BigEndian.PutUint32(dst[0:4], ssrc)
+	binary.BigEndian.PutUint16(dst[4:6], seq)
+	binary.BigEndian.PutUint32(dst[8:12], ts)
 }
 
-func obfsWrapPacket(key, payload []byte, cfg *ObfsConfig, state *ObfsState) ([]byte, error) {
-	if len(key) != wrapKeyLen {
-		return nil, fmt.Errorf("obfs: key must be %d bytes (got %d)", wrapKeyLen, len(key))
+func obfsWrapWireLen(payloadLen int, cfg *ObfsConfig) int {
+	pad := cfg.PaddingMax
+	if pad < 1 {
+		pad = 1
 	}
+	return 12 + payloadLen + chacha20poly1305.Overhead + pad
+}
+
+func obfsWrapPacketInto(dst []byte, aead cipher.AEAD, payload []byte, cfg *ObfsConfig, state *ObfsState, nonce *[12]byte) (int, error) {
 	if len(payload) == 0 {
-		return nil, errors.New("obfs: empty payload")
+		return 0, errors.New("obfs: empty payload")
 	}
 
-	state.mu.Lock()
 	c := state.count
 	state.count++
-	state.mu.Unlock()
 
 	seq := state.initSeq + uint16(c)
 	ts := state.initTs + uint32(c)*960 + uint32(c>>16)
-
-	nonce := obfsBuildNonce(cfg.SSRC, seq, ts)
 
 	padRand := 0
 	if cfg.PaddingMax > 0 {
@@ -106,34 +91,30 @@ func obfsWrapPacket(key, payload []byte, cfg *ObfsConfig, state *ObfsState) ([]b
 	padTotal := padRand + 1
 
 	outLen := 12 + len(payload) + chacha20poly1305.Overhead + padTotal
-	out := make([]byte, outLen)
-
-	out[0] = 0x80 | 0x20
-	out[1] = cfg.PayloadType & 0x7F
-	binary.BigEndian.PutUint16(out[2:4], seq)
-	binary.BigEndian.PutUint32(out[4:8], ts)
-	binary.BigEndian.PutUint32(out[8:12], cfg.SSRC)
-
-	aead, err := getAEAD(key)
-	if err != nil {
-		return nil, fmt.Errorf("obfs: cipher init: %w", err)
+	if outLen > len(dst) {
+		return 0, fmt.Errorf("obfs: dst buffer too small (%d > %d)", outLen, len(dst))
 	}
-	sealed := aead.Seal(out[12:12], nonce, payload, out[:12])
+
+	dst[0] = 0x80 | 0x20
+	dst[1] = cfg.PayloadType & 0x7F
+	binary.BigEndian.PutUint16(dst[2:4], seq)
+	binary.BigEndian.PutUint32(dst[4:8], ts)
+	binary.BigEndian.PutUint32(dst[8:12], cfg.SSRC)
+
+	obfsBuildNonce(nonce, cfg.SSRC, seq, ts)
+	sealed := aead.Seal(dst[12:12], nonce[:], payload, dst[:12])
 
 	padStart := 12 + len(sealed)
 	if padRand > 0 {
-		rand.Read(out[padStart : padStart+padRand])
+		rand.Read(dst[padStart : padStart+padRand])
 	}
 
-	out[outLen-1] = byte(padTotal)
+	dst[outLen-1] = byte(padTotal)
 
-	return out, nil
+	return outLen, nil
 }
 
-func obfsUnwrapPacket(key, wire, dst []byte) (int, error) {
-	if len(key) != wrapKeyLen {
-		return 0, fmt.Errorf("obfs: key must be %d bytes (got %d)", wrapKeyLen, len(key))
-	}
+func obfsUnwrapPacket(aead cipher.AEAD, wire, dst []byte, nonce *[12]byte) (int, error) {
 	if len(wire) < 13 {
 		return 0, errors.New("obfs: packet too short")
 	}
@@ -163,12 +144,8 @@ func obfsUnwrapPacket(key, wire, dst []byte) (int, error) {
 		return 0, errors.New("obfs: dst buffer too small")
 	}
 
-	nonce := obfsBuildNonce(ssrc, seq, ts)
-	aead, err := getAEAD(key)
-	if err != nil {
-		return 0, fmt.Errorf("obfs: cipher init: %w", err)
-	}
-	plain, err := aead.Open(dst[:0], nonce, wire[12:payloadEnd], wire[:12])
+	obfsBuildNonce(nonce, ssrc, seq, ts)
+	plain, err := aead.Open(dst[:0], nonce[:], wire[12:payloadEnd], wire[:12])
 	if err != nil {
 		return 0, fmt.Errorf("obfs: auth: %w", err)
 	}
