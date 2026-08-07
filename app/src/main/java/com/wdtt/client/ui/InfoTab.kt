@@ -44,17 +44,14 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.HelpOutline
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Update
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -81,8 +78,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.wdtt.client.BuildConfig
 import com.wdtt.client.R
@@ -98,12 +93,10 @@ import kotlin.math.cos
 import kotlin.math.min
 import kotlin.math.sin
 
-private const val ReleasesUrl = "https://github.com/amurcanov/proxy-turn-vk-android/releases"
-private const val IssuesUrl = "https://github.com/amurcanov/proxy-turn-vk-android/issues/new"
+private const val ReleasesUrl = "https://github.com/Yan4ik000/ProxyTurn-Android/releases"
+private const val IssuesUrl = "https://github.com/Yan4ik000/ProxyTurn-Android/issues/new"
 private const val DeveloperProfileUrl = "https://github.com/amurcanov"
-private const val RepositoryUrl = "https://github.com/amurcanov/proxy-turn-vk-android"
-private const val DonateUrl = ""
-private val DonateActionButtonColor = Color(0xFF00AEA5)
+private const val RepositoryUrl = "https://github.com/Yan4ik000/ProxyTurn-Android"
 
 private val browserPackages = listOf(
     "com.android.chrome",
@@ -171,7 +164,6 @@ fun InfoTab(
     var isCheckingUpdates by remember { mutableStateOf(false) }
     var pendingManualRelease by remember { mutableStateOf<com.wdtt.client.AppReleaseInfo?>(null) }
     var showHelpDialog by remember { mutableStateOf(false) }
-    var showDonateDialog by remember { mutableStateOf(false) }
     var actionsExpanded by actionsExpandedState
     var projectExpanded by projectExpandedState
     val updateLatestVersion by settingsStore.updateLatestVersion.collectAsStateWithLifecycle(initialValue = "")
@@ -210,7 +202,7 @@ fun InfoTab(
             )
         }
 
-        InfoHeroCard(currentVersion = currentVersion, onSupportClick = { showDonateDialog = true })
+        InfoHeroCard(currentVersion = currentVersion, onSupportClick = { openUrlInBrowser(context, RepositoryUrl) })
 
         ExpandableSectionCard(
             title = "Действия",
@@ -350,7 +342,7 @@ fun InfoTab(
 
         ExpandableSectionCard(
             title = "О проекте",
-            itemCount = "3 ссылки",
+            itemCount = "2 ссылки",
             expanded = projectExpanded,
             onToggle = { projectExpanded = !projectExpanded },
             icon = {
@@ -362,20 +354,6 @@ fun InfoTab(
                 )
             }
         ) {
-            ProjectLinkRow(
-                title = "Автор Android-версии",
-                subtitle = "GitHub профиль amurcanov",
-                onClick = { openUrlInBrowser(context, DeveloperProfileUrl) },
-                icon = {
-                    Icon(
-                        imageVector = Icons.Default.Person,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
-            )
-
             ProjectLinkRow(
                 title = "Репозиторий WDTT",
                 subtitle = "Исходники и релизы приложения",
@@ -405,11 +383,24 @@ fun InfoTab(
             )
         }
 
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 10.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = "Автор оригинального WDTT",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontSize = 13.sp,
+                modifier = Modifier.clickable { openUrlInBrowser(context, DeveloperProfileUrl) }
+            )
+        }
+
         Spacer(modifier = Modifier.height(8.dp))
     }
 
     if (showHelpDialog) ImportantInfoDialog(onDismiss = { showHelpDialog = false })
-    if (showDonateDialog) DonateDialog(onDismiss = { showDonateDialog = false })
 }
 
 @Composable
@@ -500,16 +491,16 @@ private fun InfoHeroCard(currentVersion: String, onSupportClick: () -> Unit) {
                     onClick = onSupportClick,
                     shape = RoundedCornerShape(22.dp),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = DonateActionButtonColor,
-                        contentColor = Color.White
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary
                     ),
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(54.dp)
                 ) {
-                    Icon(Icons.Default.Favorite, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Icon(Icons.Default.Star, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Поддержать проект", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                    Text("Поддержать проект звездой", fontWeight = FontWeight.Bold, fontSize = 15.sp)
                 }
             }
         }
@@ -772,77 +763,6 @@ private fun ProjectLinkRow(
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(18.dp)
             )
-        }
-    }
-}
-
-@Composable
-private fun DonateDialog(onDismiss: () -> Unit) {
-    val context = LocalContext.current
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
-    ) {
-        Surface(
-            shape = RoundedCornerShape(32.dp),
-            color = MaterialTheme.colorScheme.surface,
-            contentColor = MaterialTheme.colorScheme.onSurface,
-            tonalElevation = 10.dp,
-            shadowElevation = 14.dp,
-            modifier = Modifier.fillMaxWidth(0.92f)
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 24.dp, vertical = 22.dp),
-                verticalArrangement = Arrangement.spacedBy(20.dp)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Text(
-                        text = "Поддержка проекта",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Black,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.weight(1f)
-                    )
-                    FilledTonalIconButton(onClick = onDismiss) {
-                        Icon(Icons.Default.Close, contentDescription = "Закрыть")
-                    }
-                }
-
-                Text(
-                    text = "Если приложение реально помогает, можно поддержать Android-версию проекта.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center,
-                    lineHeight = 20.sp
-                )
-
-                Button(
-                    onClick = { openUrlInBrowser(context, DonateUrl) },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(62.dp),
-                    shape = RoundedCornerShape(22.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = WDTTColors.donate,
-                        contentColor = Color.White
-                    )
-                ) {
-                    Icon(
-                        painter = painterResource(id = R.drawable.ic_yoomoney),
-                        contentDescription = "ЮMoney",
-                        tint = Color.Unspecified,
-                        modifier = Modifier
-                            .width(126.dp)
-                            .height(28.dp)
-                    )
-                }
-            }
         }
     }
 }
