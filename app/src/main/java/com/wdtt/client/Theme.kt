@@ -213,9 +213,6 @@ object WDTTColors {
     
     val github = Color(0xFF24292E)
     val githubDark = Color(0xFF333C47)
-
-    
-    val donate = Color(0xFF8B3FFD)
 }
 
 @Composable
