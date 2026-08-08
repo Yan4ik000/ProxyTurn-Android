@@ -31,7 +31,7 @@ func NewObfsConfig(mode string) *ObfsConfig {
 	pad := 24
 	if mode == "video" {
 		pt = 96
-		pad = 60
+		pad = 32
 	}
 
 	return &ObfsConfig{
