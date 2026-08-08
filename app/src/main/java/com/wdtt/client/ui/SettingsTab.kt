@@ -7,6 +7,11 @@ import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
@@ -19,6 +24,8 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
@@ -41,14 +48,17 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.ColorFilter
-import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -1273,23 +1283,6 @@ private fun TunnelDashboard(
     onOpenDeploy: () -> Unit,
     onToggleTunnel: () -> Unit
 ) {
-    val logoScale by animateFloatAsState(
-        targetValue = if (tunnelRunning) 1.12f else 0.94f,
-        animationSpec = tween(
-            durationMillis = 650,
-            easing = androidx.compose.animation.core.CubicBezierEasing(0.22f, 1f, 0.36f, 1f)
-        ),
-        label = "dashboard_logo_scale"
-    )
-    val verifiedReveal by animateFloatAsState(
-        targetValue = if (tunnelVerified) 1f else 0f,
-        animationSpec = if (tunnelVerified) {
-            tween(durationMillis = 620, easing = androidx.compose.animation.core.FastOutSlowInEasing)
-        } else {
-            androidx.compose.animation.core.snap()
-        },
-        label = "dashboard_verified_reveal"
-    )
     val dashboardScale = 1.12f
     val density = LocalDensity.current
 
@@ -1325,61 +1318,13 @@ private fun TunnelDashboard(
         CompositionLocalProvider(
             LocalDensity provides Density(density.density, density.fontScale * dashboardScale)
         ) {
-            Surface(
-                onClick = onToggleTunnel,
+            AuroraPowerButton(
+                tunnelRunning = tunnelRunning,
+                tunnelVerified = tunnelVerified,
                 enabled = enabled,
-                shape = CircleShape,
-                color = Color(0xFF4B4F57),
-                shadowElevation = 12.dp,
-                modifier = Modifier
-                    .size(164.dp * dashboardScale)
-                    .scale(logoScale)
-            ) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Image(
-                        painter = painterResource(R.drawable.ic_vpn_key_gradient),
-                        contentDescription = if (tunnelRunning) "Остановить туннель" else "Подключить туннель",
-                        modifier = Modifier.size(112.dp * dashboardScale),
-                        colorFilter = ColorFilter.tint(Color(0xFFE2E5EA)),
-                        alpha = 0.92f
-                    )
-
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .drawWithContent {
-                                if (verifiedReveal > 0f) {
-                                    val radius = size.minDimension / 2f * verifiedReveal
-                                    val revealPath = Path().apply {
-                                        addOval(
-                                            Rect(
-                                                left = center.x - radius,
-                                                top = center.y - radius,
-                                                right = center.x + radius,
-                                                bottom = center.y + radius
-                                            )
-                                        )
-                                    }
-                                    clipPath(revealPath) { this@drawWithContent.drawContent() }
-                                }
-                            },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Canvas(modifier = Modifier.fillMaxSize()) {
-                            drawCircle(
-                                color = Color(0xFF245A9B),
-                                radius = size.minDimension / 2f,
-                                center = center
-                            )
-                        }
-                        Image(
-                            painter = painterResource(R.drawable.ic_vpn_key_gradient),
-                            contentDescription = null,
-                            modifier = Modifier.size(112.dp * dashboardScale)
-                        )
-                    }
-                }
-            }
+                dashboardScale = dashboardScale,
+                onToggle = onToggleTunnel
+            )
 
             Spacer(Modifier.height(18.dp * dashboardScale))
 
@@ -1398,53 +1343,378 @@ private fun TunnelDashboard(
 
             Spacer(Modifier.height(10.dp * dashboardScale))
 
-            AppSectionCard(
-                modifier = Modifier.fillMaxWidth(0.74f * dashboardScale),
-                contentPadding = PaddingValues(
-                    horizontal = 16.dp * dashboardScale,
-                    vertical = 13.dp * dashboardScale
-                ),
-                verticalArrangement = Arrangement.spacedBy(10.dp * dashboardScale)
-            ) {
-                Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("IP сервера", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text(
-                        peer,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f))
-                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    DashboardMetric("Режим", mode, Modifier.weight(1f))
-                    VerticalDivider(
-                        modifier = Modifier.height(38.dp * dashboardScale),
-                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f)
-                    )
-                    DashboardMetric("Мощность", workers, Modifier.weight(1f))
-                    VerticalDivider(
-                        modifier = Modifier.height(38.dp * dashboardScale),
-                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f)
-                    )
-                    DashboardMetric("Скрытие", obfuscation, Modifier.weight(1f))
-                }
-            }
+            AuroraStatusCard(
+                peer = peer,
+                mode = mode,
+                workers = workers,
+                obfuscation = obfuscation,
+                tunnelRunning = tunnelRunning,
+                tunnelVerified = tunnelVerified,
+                dashboardScale = dashboardScale
+            )
         }
         Spacer(Modifier.weight(1f))
     }
 }
 
 @Composable
-private fun DashboardMetric(
+private fun AuroraStatusCard(
+    peer: String,
+    mode: String,
+    workers: String,
+    obfuscation: String,
+    tunnelRunning: Boolean,
+    tunnelVerified: Boolean,
+    dashboardScale: Float
+) {
+    val palette = MaterialTheme.colorScheme
+    val ds = dashboardScale
+
+    val reveal by animateFloatAsState(
+        targetValue = if (tunnelVerified) 1f else 0f,
+        animationSpec = tween(650, easing = androidx.compose.animation.core.FastOutSlowInEasing),
+        label = "status_reveal"
+    )
+    val infinite = rememberInfiniteTransition(label = "status_infinite")
+    val breath by infinite.animateFloat(
+        initialValue = 0.7f, targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(1600, easing = androidx.compose.animation.core.FastOutSlowInEasing), RepeatMode.Reverse),
+        label = "status_breath"
+    )
+
+    val borderColor by animateColorAsState(
+        targetValue = if (tunnelVerified) lerp(palette.outlineVariant, palette.primary, 0.5f) else palette.outlineVariant,
+        animationSpec = tween(650), label = "status_border"
+    )
+    val valueColor by animateColorAsState(
+        targetValue = if (tunnelVerified) palette.primary else palette.onSurface,
+        animationSpec = tween(650), label = "status_value"
+    )
+    val dotColor by animateColorAsState(
+        targetValue = when {
+            tunnelVerified -> palette.primary
+            tunnelRunning -> lerp(palette.primary, palette.tertiary, 0.5f)
+            else -> palette.onSurfaceVariant
+        },
+        animationSpec = tween(650), label = "status_dot"
+    )
+    val cardBg = lerp(palette.surface, palette.primary, 0.05f * reveal + 0.02f)
+    val dotRingProgress by animateFloatAsState(
+        targetValue = if (tunnelRunning) 1f else 0f,
+        animationSpec = tween(600, easing = androidx.compose.animation.core.FastOutSlowInEasing),
+        label = "status_dot_ring"
+    )
+
+    Surface(
+        modifier = Modifier.fillMaxWidth(0.78f * ds),
+        shape = RoundedCornerShape(24.dp * ds),
+        color = cardBg,
+        border = BorderStroke(1.dp, borderColor.copy(alpha = 0.35f + 0.35f * reveal * breath)),
+        shadowElevation = (4.dp + 6.dp * reveal)
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 16.dp * ds, vertical = 13.dp * ds),
+            verticalArrangement = Arrangement.spacedBy(10.dp * ds)
+        ) {
+            Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Canvas(modifier = Modifier.size(10.dp * ds)) {
+                        val r = size.minDimension / 2f
+                        if (dotRingProgress > 0.01f) {
+                            drawCircle(
+                                color = dotColor,
+                                radius = r * (0.9f + 0.35f * breath * dotRingProgress),
+                                center = center,
+                                alpha = (0.30f - 0.10f * breath) * dotRingProgress
+                            )
+                        }
+                        drawCircle(color = dotColor, radius = r * 0.75f, center = center)
+                    }
+                    Spacer(Modifier.width(6.dp * ds))
+                    Text(
+                        "IP сервера",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = palette.onSurfaceVariant
+                    )
+                }
+                Text(
+                    peer,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = valueColor,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(1.dp)
+                    .background(
+                        Brush.horizontalGradient(
+                            listOf(
+                                Color.Transparent,
+                                borderColor.copy(alpha = 0.45f + 0.25f * reveal),
+                                Color.Transparent
+                            )
+                        )
+                    )
+            )
+            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                AuroraMetric("Режим", mode, valueColor, Modifier.weight(1f))
+                AuroraDivider(ds, borderColor, reveal)
+                AuroraMetric("Мощность", workers, valueColor, Modifier.weight(1f))
+                AuroraDivider(ds, borderColor, reveal)
+                AuroraMetric("Скрытие", obfuscation, valueColor, Modifier.weight(1f))
+            }
+        }
+    }
+}
+
+@Composable
+private fun AuroraMetric(
     label: String,
     value: String,
+    valueColor: Color,
     modifier: Modifier = Modifier
 ) {
     Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
         Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text(value, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, maxLines = 1)
+        Text(
+            value,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = valueColor,
+            maxLines = 1
+        )
+    }
+}
+
+@Composable
+private fun AuroraDivider(
+    dashboardScale: Float,
+    color: Color,
+    reveal: Float
+) {
+    Box(
+        modifier = Modifier
+            .width(1.dp)
+            .height(38.dp * dashboardScale)
+            .background(
+                Brush.verticalGradient(
+                    listOf(
+                        Color.Transparent,
+                        color.copy(alpha = 0.40f + 0.20f * reveal),
+                        Color.Transparent
+                    )
+                )
+            )
+    )
+}
+
+@Composable
+private fun AuroraPowerButton(
+    tunnelRunning: Boolean,
+    tunnelVerified: Boolean,
+    enabled: Boolean,
+    dashboardScale: Float,
+    onToggle: () -> Unit
+) {
+    val palette = MaterialTheme.colorScheme
+    val connecting = tunnelRunning && !tunnelVerified
+
+    val scale by animateFloatAsState(
+        targetValue = if (tunnelRunning) 1.10f else 0.96f,
+        animationSpec = tween(650, easing = androidx.compose.animation.core.CubicBezierEasing(0.22f, 1f, 0.36f, 1f)),
+        label = "aurora_scale"
+    )
+    val reveal by animateFloatAsState(
+        targetValue = if (tunnelVerified) 1f else 0f,
+        animationSpec = tween(620, easing = androidx.compose.animation.core.FastOutSlowInEasing),
+        label = "aurora_reveal"
+    )
+    val connectAlpha by animateFloatAsState(
+        targetValue = if (connecting) 1f else 0f,
+        animationSpec = tween(300),
+        label = "aurora_connect"
+    )
+
+    val infinite = rememberInfiniteTransition(label = "aurora_infinite")
+    val rippleT by infinite.animateFloat(
+        initialValue = 0f, targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(2400, easing = LinearEasing)),
+        label = "aurora_ripple"
+    )
+    val spin by infinite.animateFloat(
+        initialValue = 0f, targetValue = 360f,
+        animationSpec = infiniteRepeatable(tween(1100, easing = LinearEasing)),
+        label = "aurora_spin"
+    )
+    val slowSpin by infinite.animateFloat(
+        initialValue = 0f, targetValue = 360f,
+        animationSpec = infiniteRepeatable(tween(9000, easing = LinearEasing)),
+        label = "aurora_slowspin"
+    )
+    val breath by infinite.animateFloat(
+        initialValue = 0.75f, targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(1900, easing = androidx.compose.animation.core.FastOutSlowInEasing), RepeatMode.Reverse),
+        label = "aurora_breath"
+    )
+
+    val offColor by animateColorAsState(
+        targetValue = palette.surfaceVariant,
+        animationSpec = tween(650), label = "aurora_off"
+    )
+    val onColor by animateColorAsState(
+        targetValue = palette.primary,
+        animationSpec = tween(650), label = "aurora_on"
+    )
+    val iconTint by animateColorAsState(
+        targetValue = if (tunnelVerified) palette.onPrimary else palette.onSurfaceVariant,
+        animationSpec = tween(650), label = "aurora_icon"
+    )
+    val offHi = lerp(offColor, palette.surface, 0.5f)
+    val onHi = lerp(onColor, Color.White, 0.30f)
+    val onLo = lerp(onColor, Color.Black, 0.14f)
+
+    Box(
+        modifier = Modifier.size(232.dp * dashboardScale),
+        contentAlignment = Alignment.Center
+    ) {
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val maxR = size.minDimension / 2f
+            val buttonR = maxR * 0.72f
+            val ringR = buttonR + 9.dp.toPx()
+            val ringSize = Size(ringR * 2, ringR * 2)
+            val ringTopLeft = Offset(center.x - ringR, center.y - ringR)
+
+            if (reveal > 0f) {
+                drawCircle(
+                    brush = Brush.radialGradient(
+                        colors = listOf(onColor.copy(alpha = 0.38f * reveal * breath), Color.Transparent),
+                        center = center,
+                        radius = maxR
+                    ),
+                    radius = maxR,
+                    center = center
+                )
+                var i = 0
+                while (i < 2) {
+                    val f = (rippleT + i * 0.5f) % 1f
+                    drawCircle(
+                        color = onColor,
+                        radius = buttonR + (maxR - buttonR) * f,
+                        center = center,
+                        alpha = (1f - f) * 0.30f * reveal,
+                        style = Stroke(width = 2.dp.toPx())
+                    )
+                    i++
+                }
+                drawCircle(
+                    color = onColor,
+                    radius = ringR,
+                    center = center,
+                    alpha = 0.55f * reveal,
+                    style = Stroke(width = 3.dp.toPx())
+                )
+                rotate(slowSpin) {
+                    drawArc(
+                        color = onColor,
+                        startAngle = 0f,
+                        sweepAngle = 55f,
+                        useCenter = false,
+                        topLeft = ringTopLeft,
+                        size = ringSize,
+                        alpha = 0.7f * reveal,
+                        style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round)
+                    )
+                }
+            }
+            if (connectAlpha > 0f) {
+                drawCircle(
+                    color = onColor,
+                    radius = ringR,
+                    center = center,
+                    alpha = 0.15f * connectAlpha,
+                    style = Stroke(width = 3.dp.toPx())
+                )
+                rotate(spin) {
+                    drawArc(
+                        color = onColor,
+                        startAngle = 0f,
+                        sweepAngle = 100f,
+                        useCenter = false,
+                        topLeft = ringTopLeft,
+                        size = ringSize,
+                        alpha = connectAlpha,
+                        style = Stroke(width = 4.dp.toPx(), cap = StrokeCap.Round)
+                    )
+                }
+            }
+            val offRingAlpha = (1f - reveal) * (1f - connectAlpha)
+            if (offRingAlpha > 0.01f) {
+                drawCircle(
+                    color = palette.onSurfaceVariant,
+                    radius = ringR,
+                    center = center,
+                    alpha = (0.14f + 0.08f * breath) * offRingAlpha,
+                    style = Stroke(width = 2.dp.toPx())
+                )
+            }
+        }
+
+        Box(
+            modifier = Modifier
+                .size(164.dp * dashboardScale)
+                .scale(scale)
+                .shadow(elevation = 14.dp, shape = CircleShape)
+                .clip(CircleShape)
+                .clickable(enabled = enabled, onClick = onToggle),
+            contentAlignment = Alignment.Center
+        ) {
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                val r = size.minDimension / 2f
+                if (reveal < 1f) {
+                    drawCircle(
+                        brush = Brush.radialGradient(
+                            colors = listOf(offHi, offColor),
+                            center = center,
+                            radius = r
+                        ),
+                        radius = r,
+                        center = center,
+                        alpha = 1f - reveal
+                    )
+                }
+                if (reveal > 0f) {
+                    drawCircle(
+                        brush = Brush.radialGradient(
+                            colors = listOf(onHi, onLo),
+                            center = Offset(center.x, center.y - r * 0.25f),
+                            radius = r * 1.1f
+                        ),
+                        radius = r,
+                        center = center,
+                        alpha = reveal
+                    )
+                }
+                drawCircle(
+                    brush = Brush.radialGradient(
+                        colors = listOf(Color.White.copy(alpha = 0.14f), Color.Transparent),
+                        center = Offset(center.x, center.y - r * 0.6f),
+                        radius = r * 0.9f
+                    ),
+                    radius = r,
+                    center = center
+                )
+            }
+            Image(
+                painter = painterResource(R.drawable.ic_vpn_key_gradient),
+                contentDescription = if (tunnelRunning) "Остановить туннель" else "Подключить туннель",
+                modifier = Modifier.size(104.dp * dashboardScale),
+                colorFilter = ColorFilter.tint(iconTint)
+            )
+        }
     }
 }
 
