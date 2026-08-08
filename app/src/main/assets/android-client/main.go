@@ -155,6 +155,7 @@ func main() {
 	fingerprint := flag.String("fingerprint", "chrome", "браузерный фингерпринт (chrome, safari, ios, android, firefox)")
 	clientIdsFlag := flag.String("client-ids", "", "ID клиентов VK через запятую")
 	obfsMode := flag.String("obfs", "audio", "режим обфускации (audio/video)")
+	dynamicMode := flag.Bool("dynamic", false, "динамическое число воркеров")
 
 	flag.Parse()
 	activeVKAuthMode := setVKAuthMode(*vkAuthMode)
@@ -327,6 +328,29 @@ func main() {
 
 	var wg sync.WaitGroup
 	workerIDCounter := 1
+
+	if *dynamicMode {
+		log.Printf("[КЛИЕНТ] Динамическая мощность: %d..%d воркеров, в простое база %d (макс. групп: %d)", awakeMinGroups*workersPerGroup, *numW, sleepMinGroups*workersPerGroup, numGroups)
+		scaler := &Autoscaler{
+			ctx:        ctx,
+			tp:         tp,
+			peer:       peer,
+			disp:       disp,
+			heartbeats: heartbeats,
+			localPort:  localPort,
+			deviceID:   *deviceID,
+			password:   *connPassword,
+			stats:      stats,
+			pauseFlag:  &pauseFlag,
+			configCh:   configCh,
+			maxGroups:  numGroups,
+		}
+		scaler.Run()
+		close(configCh)
+		<-configDone
+		log.Println("[КЛИЕНТ] Все воркеры завершены")
+		return
+	}
 
 	var prevWaitCreds <-chan struct{}
 	var prevWaitSpawn <-chan struct{}

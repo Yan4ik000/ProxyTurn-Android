@@ -32,7 +32,7 @@ func putPktBuf(b []byte) {
 
 const (
 	returnChBuf = 512
-	chunkSize   = 12
+	chunkSize   = 24
 )
 
 type WorkerSlot struct {
@@ -101,6 +101,19 @@ func (d *Dispatcher) Unregister(slot *WorkerSlot) {
 	}
 	d.workers.Store(&newWorkers)
 	log.Printf("[ДИСП] Воркер #%d отключён (осталось: %d)", slot.ID, len(newWorkers))
+}
+
+func (d *Dispatcher) queueFillRatio() float64 {
+	workersPtr := d.workers.Load()
+	if workersPtr == nil || len(*workersPtr) == 0 {
+		return 0
+	}
+	ws := *workersPtr
+	used := 0
+	for _, w := range ws {
+		used += len(w.SendCh)
+	}
+	return float64(used) / float64(len(ws)*workerSendBuf)
 }
 
 func (d *Dispatcher) readLoop() {

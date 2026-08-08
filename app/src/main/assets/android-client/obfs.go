@@ -45,15 +45,17 @@ type ObfsState struct {
 	initSeq uint16
 	initTs  uint32
 	count   uint64
+	padSeed uint64
 }
 
 func NewObfsState() *ObfsState {
-	var buf [6]byte
+	var buf [14]byte
 	rand.Read(buf[:])
 	return &ObfsState{
 		initSeq: binary.BigEndian.Uint16(buf[0:2]),
 		initTs:  binary.BigEndian.Uint32(buf[2:6]),
 		count:   0,
+		padSeed: binary.BigEndian.Uint64(buf[6:14]),
 	}
 }
 
@@ -83,10 +85,14 @@ func obfsWrapPacketInto(dst []byte, aead cipher.AEAD, payload []byte, cfg *ObfsC
 	ts := state.initTs + uint32(c)*960 + uint32(c>>16)
 
 	padRand := 0
+	x := state.padSeed + c*0x9e3779b97f4a7c15
 	if cfg.PaddingMax > 0 {
-		var rndBuf [1]byte
-		rand.Read(rndBuf[:])
-		padRand = int(rndBuf[0]) % cfg.PaddingMax
+		x ^= x >> 30
+		x *= 0xbf58476d1ce4e5b9
+		x ^= x >> 27
+		x *= 0x94d049bb133111eb
+		x ^= x >> 31
+		padRand = int(x % uint64(cfg.PaddingMax))
 	}
 	padTotal := padRand + 1
 
@@ -106,7 +112,9 @@ func obfsWrapPacketInto(dst []byte, aead cipher.AEAD, payload []byte, cfg *ObfsC
 
 	padStart := 12 + len(sealed)
 	if padRand > 0 {
-		rand.Read(dst[padStart : padStart+padRand])
+		for i := 0; i < padRand; i++ {
+			dst[padStart+i] = byte(x >> ((i % 8) * 8))
+		}
 	}
 
 	dst[outLen-1] = byte(padTotal)

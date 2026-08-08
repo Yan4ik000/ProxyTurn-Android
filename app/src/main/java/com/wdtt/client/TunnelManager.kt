@@ -230,7 +230,11 @@ object TunnelManager {
                 }
 
                 val hashCount = hashList.size.coerceIn(1, 4)
-                val totalWorkers = params.totalWorkers.coerceIn(1, 128)
+                val totalWorkers = if (params.powerDynamic) {
+                    (hashCount * 27).coerceIn(9, 108)
+                } else {
+                    params.totalWorkers.coerceIn(1, 128)
+                }
                 
                 val hashMode = if (activeHashIndex == 0) "Основной" else "Запасной"
                 updateLog("config_info", "[$hashMode] Хешей=$hashCount, Потоков=$totalWorkers", 1)
@@ -264,6 +268,9 @@ object TunnelManager {
                 cmd.add(params.obfsMode)
                 cmd.add("-vk-auth-mode")
                 cmd.add(params.vkAuthMode)
+                if (params.powerDynamic) {
+                    cmd.add("-dynamic")
+                }
 
                 val androidId = android.provider.Settings.Secure.getString(context.contentResolver, android.provider.Settings.Secure.ANDROID_ID) ?: "unknown"
                 cmd.add("-device-id")
@@ -895,5 +902,6 @@ data class TunnelParams(
     val captchaSolveMethod: String = "auto",
     val fingerprint: String = "firefox",
     val clientIds: String = "8202606,6287487",
-    val obfsMode: String = "audio"
+    val obfsMode: String = "audio",
+    val powerDynamic: Boolean = false
 )

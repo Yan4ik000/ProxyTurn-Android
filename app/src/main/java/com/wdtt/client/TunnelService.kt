@@ -75,7 +75,8 @@ class TunnelService : Service() {
                     captchaSolveMethod = intent.getStringExtra("captcha_solve_method") ?: "auto",
                     fingerprint = intent.getStringExtra("fingerprint") ?: "firefox",
                     clientIds = intent.getStringExtra("client_ids") ?: "8202606,6287487",
-                    obfsMode = intent.getStringExtra("obfs_mode")?.takeIf { it.isNotBlank() } ?: "audio"
+                    obfsMode = intent.getStringExtra("obfs_mode")?.takeIf { it.isNotBlank() } ?: "audio",
+                    powerDynamic = intent.getBooleanExtra("power_dynamic", false)
                 )
                 startTunnel(params)
             }

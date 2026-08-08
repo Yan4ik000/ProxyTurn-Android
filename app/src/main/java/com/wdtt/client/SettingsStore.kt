@@ -33,6 +33,7 @@ class SettingsStore(context: Context) {
         private val VK_HASHES = stringPreferencesKey("vk_hashes")
         private val SECONDARY_VK_HASH = stringPreferencesKey("secondary_vk_hash")
         private val TOTAL_WORKERS = intPreferencesKey("workers_per_hash")
+        private val POWER_DYNAMIC = booleanPreferencesKey("power_dynamic")
         private val PROTOCOL = stringPreferencesKey("protocol")
         private val LISTEN_PORT = intPreferencesKey("listen_port")
         private val MANUAL_PORTS_ENABLED = booleanPreferencesKey("manual_ports_enabled")
@@ -118,7 +119,7 @@ class SettingsStore(context: Context) {
             return when (baseKey) {
                 PEER, VK_HASHES, SECONDARY_VK_HASH, PROTOCOL, SNI, USER_AGENT, DEPLOY_IP, DEPLOY_LOGIN, DEPLOY_PASSWORD, DEPLOY_PASSWORD_ENCRYPTED, DEPLOY_SSH_PORT, DEPLOY_DNS1, DEPLOY_DNS2, DEPLOY_SSH_PUBLIC_KEY, DEPLOY_SSH_PUBLIC_KEY_ENCRYPTED, DEPLOY_SSH_PRIVATE_KEY, DEPLOY_SSH_PRIVATE_KEY_ENCRYPTED, DEPLOY_SSH_KEY_PASSPHRASE, DEPLOY_SSH_KEY_PASSPHRASE_ENCRYPTED, EXCLUDED_APPS, CONNECTION_PASSWORD, CONNECTION_PASSWORD_ENCRYPTED, DEPLOY_MAIN_PASSWORD, DEPLOY_MAIN_PASSWORD_ENCRYPTED, DEPLOY_ADMIN_ID, DEPLOY_ADMIN_ID_ENCRYPTED, DEPLOY_BOT_TOKEN, DEPLOY_BOT_TOKEN_ENCRYPTED, PROXY_MODE, PROXY_HOST, VK_AUTH_MODE, OBFS_MODE, CAPTCHA_MODE, CAPTCHA_SOLVE_METHOD, CAPTCHA_WBV_SOLVE_METHOD, WDTT_LINK, SELECTED_FINGERPRINT, ACTIVE_CLIENT_IDS -> stringPreferencesKey(newName) as Preferences.Key<T>
                 TOTAL_WORKERS, LISTEN_PORT, SERVER_DTLS_PORT, SERVER_WG_PORT, PROXY_PORT -> intPreferencesKey(newName) as Preferences.Key<T>
-                MANUAL_PORTS_ENABLED, NO_DTLS, NO_DNS, IS_WHITELIST, WDTT_LINK_MODE, DETAILED_LOGS, DEPLOY_SSH_KEY_AUTH -> booleanPreferencesKey(newName) as Preferences.Key<T>
+                MANUAL_PORTS_ENABLED, NO_DTLS, NO_DNS, IS_WHITELIST, WDTT_LINK_MODE, DETAILED_LOGS, DEPLOY_SSH_KEY_AUTH, POWER_DYNAMIC -> booleanPreferencesKey(newName) as Preferences.Key<T>
                 else -> throw IllegalArgumentException("Unsupported key type: ${baseKey.name}")
             }
         }
@@ -161,6 +162,10 @@ class SettingsStore(context: Context) {
     val totalWorkers: Flow<Int> = dataStore.data.map { prefs ->
         val profile = prefs[ACTIVE_PROFILE] ?: 0
         prefs[getProfileKey(TOTAL_WORKERS, profile)] ?: 16
+    }
+    val powerDynamic: Flow<Boolean> = dataStore.data.map { prefs ->
+        val profile = prefs[ACTIVE_PROFILE] ?: 0
+        prefs[getProfileKey(POWER_DYNAMIC, profile)] ?: false
     }
     val protocol: Flow<String> = dataStore.data.map { prefs ->
         val profile = prefs[ACTIVE_PROFILE] ?: 0
@@ -443,7 +448,7 @@ class SettingsStore(context: Context) {
 
             listOf(
                 MANUAL_PORTS_ENABLED, NO_DTLS, NO_DNS, IS_WHITELIST,
-                WDTT_LINK_MODE, DETAILED_LOGS, DEPLOY_SSH_KEY_AUTH
+                WDTT_LINK_MODE, DETAILED_LOGS, DEPLOY_SSH_KEY_AUTH, POWER_DYNAMIC
             ).forEach { key -> prefs.remove(getProfileKey(key, profile)) }
         }
     }
@@ -597,6 +602,13 @@ class SettingsStore(context: Context) {
         dataStore.edit { prefs ->
             val profile = prefs[ACTIVE_PROFILE] ?: 0
             prefs[getProfileKey(VK_AUTH_MODE, profile)] = if (mode == "legacy") "legacy" else "vkcalls"
+        }
+    }
+
+    suspend fun savePowerDynamic(enabled: Boolean) {
+        dataStore.edit { prefs ->
+            val profile = prefs[ACTIVE_PROFILE] ?: 0
+            prefs[getProfileKey(POWER_DYNAMIC, profile)] = enabled
         }
     }
 

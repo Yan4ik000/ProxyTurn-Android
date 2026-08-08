@@ -119,6 +119,7 @@ class QuickToggleTileService : TileService() {
                 putExtra("fingerprint", store.selectedFingerprint.first())
                 putExtra("client_ids", store.activeClientIds.first())
                 putExtra("obfs_mode", store.obfsMode.first())
+                putExtra("power_dynamic", store.powerDynamic.first())
             }
         }.getOrNull()
     }

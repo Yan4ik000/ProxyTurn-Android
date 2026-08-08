@@ -7,6 +7,7 @@ import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -157,6 +158,7 @@ fun SettingsTabContent(
     var vkHash3 by rememberSaveable { mutableStateOf("") }
     var vkHash4 by rememberSaveable { mutableStateOf("") }
     var workersInput by rememberSaveable { mutableFloatStateOf(18f) }
+    var powerDynamic by rememberSaveable { mutableStateOf(false) }
     var showHashesDialog by rememberSaveable { mutableStateOf(false) }
     var useVKCallsAuth by rememberSaveable { mutableStateOf(true) }
     var obfsMode by rememberSaveable { mutableStateOf("audio") }
@@ -256,6 +258,7 @@ fun SettingsTabContent(
         val captchaMode = settingsStore.captchaMode.first()
         val captchaMethod = settingsStore.captchaSolveMethod.first()
         val wbvCaptchaMethod = settingsStore.captchaWbvSolveMethod.first()
+        powerDynamic = settingsStore.powerDynamic.first()
         
         peerInput = peer
         parseHashes(hashes)
@@ -403,6 +406,7 @@ fun SettingsTabContent(
             putExtra("fingerprint", activeFingerprint)
             putExtra("client_ids", activeClientIds)
             putExtra("obfs_mode", obfsMode)
+            putExtra("power_dynamic", powerDynamic)
         }
         if (Build.VERSION.SDK_INT >= 26) context.startForegroundService(intent)
         else context.startService(intent)
@@ -717,29 +721,63 @@ fun SettingsTabContent(
                             fontWeight = FontWeight.SemiBold
                         )
                         Text(
-                            text = "${currentWorkers.toInt()}",
+                            text = if (powerDynamic) "Авто" else "${currentWorkers.toInt()}",
                             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                             color = MaterialTheme.colorScheme.primary
                         )
                     }
 
-                    Spacer(Modifier.height(4.dp))
+                    Spacer(Modifier.height(10.dp))
 
-                    val maxWorkers = dynamicMaxWorkers
-                    val minWorkers = WORKERS_PER_GROUP.toFloat()
-                    val currentWorkersVal = roundToGroup(currentWorkers.coerceIn(minWorkers, maxWorkers), WORKERS_PER_GROUP.toFloat())
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        PowerModeTile(
+                            title = "Фиксированная",
+                            selected = !powerDynamic,
+                            enabled = !tunnelRunning,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            powerDynamic = false
+                            scope.launch { settingsStore.savePowerDynamic(false) }
+                        }
+                        PowerModeTile(
+                            title = "Динамическая",
+                            selected = powerDynamic,
+                            enabled = !tunnelRunning,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            powerDynamic = true
+                            scope.launch { settingsStore.savePowerDynamic(true) }
+                        }
+                    }
 
-                    CompactSteppedSlider(
-                        value = currentWorkersVal,
-                        onValueChange = { raw ->
-                            workersInput = roundToGroup(raw, WORKERS_PER_GROUP.toFloat())
-                            scheduleSave()
-                        },
-                        valueRange = minWorkers..maxWorkers,
-                        stepSize = WORKERS_PER_GROUP.toFloat(),
-                        enabled = !tunnelRunning,
-                        modifier = Modifier.fillMaxWidth()
-                    )
+                    AnimatedVisibility(
+                        visible = !powerDynamic,
+                        enter = expandVertically() + fadeIn(),
+                        exit = shrinkVertically() + fadeOut()
+                    ) {
+                        Column {
+                            Spacer(Modifier.height(8.dp))
+
+                            val maxWorkers = dynamicMaxWorkers
+                            val minWorkers = WORKERS_PER_GROUP.toFloat()
+                            val currentWorkersVal = roundToGroup(currentWorkers.coerceIn(minWorkers, maxWorkers), WORKERS_PER_GROUP.toFloat())
+
+                            CompactSteppedSlider(
+                                value = currentWorkersVal,
+                                onValueChange = { raw ->
+                                    workersInput = roundToGroup(raw, WORKERS_PER_GROUP.toFloat())
+                                    scheduleSave()
+                                },
+                                valueRange = minWorkers..maxWorkers,
+                                stepSize = WORKERS_PER_GROUP.toFloat(),
+                                enabled = !tunnelRunning,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                    }
 
                     Spacer(Modifier.height(6.dp))
 
@@ -1195,7 +1233,7 @@ fun SettingsTabContent(
                     else peerInput.ifBlank { "Не указан" },
                 mode = if (useVKCallsAuth) "Вызов" else "Капча",
                 obfuscation = if (obfsMode == "video") "Видео" else "Аудио",
-                workers = currentWorkers.toInt(),
+                workers = if (powerDynamic) "Авто" else currentWorkers.toInt().toString(),
                 tunnelRunning = tunnelRunning,
                 tunnelVerified = tunnelRunning && !tunnelConfig.isNullOrBlank(),
                 cooldownActive = cooldownActive,
@@ -1225,7 +1263,7 @@ private fun TunnelDashboard(
     peer: String,
     mode: String,
     obfuscation: String,
-    workers: Int,
+    workers: String,
     tunnelRunning: Boolean,
     tunnelVerified: Boolean,
     cooldownActive: Boolean,
@@ -1385,7 +1423,7 @@ private fun TunnelDashboard(
                         modifier = Modifier.height(38.dp * dashboardScale),
                         color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f)
                     )
-                    DashboardMetric("Мощность", workers.toString(), Modifier.weight(1f))
+                    DashboardMetric("Мощность", workers, Modifier.weight(1f))
                     VerticalDivider(
                         modifier = Modifier.height(38.dp * dashboardScale),
                         color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f)
@@ -1459,6 +1497,64 @@ private fun checkVkClientId(appId: String): Boolean {
         }
     }
     return false
+}
+
+@Composable
+private fun PowerModeTile(
+    title: String,
+    selected: Boolean,
+    enabled: Boolean = true,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    val containerColor by animateColorAsState(
+        targetValue = when {
+            !enabled && selected -> MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
+            selected -> MaterialTheme.colorScheme.primary.copy(alpha = 0.22f)
+            else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        },
+        animationSpec = tween(250),
+        label = "power_tile_bg"
+    )
+    val borderColor by animateColorAsState(
+        targetValue = when {
+            !enabled && selected -> MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)
+            selected -> MaterialTheme.colorScheme.primary
+            else -> MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)
+        },
+        animationSpec = tween(250),
+        label = "power_tile_border"
+    )
+    val titleColor by animateColorAsState(
+        targetValue = when {
+            selected -> MaterialTheme.colorScheme.primary
+            else -> MaterialTheme.colorScheme.onSurface
+        },
+        animationSpec = tween(250),
+        label = "power_tile_title"
+    )
+
+    Surface(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = modifier,
+        shape = RoundedCornerShape(16.dp),
+        color = containerColor,
+        border = BorderStroke(1.dp, borderColor)
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                title,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                color = titleColor,
+                maxLines = 1
+            )
+        }
+    }
 }
 
 @Composable

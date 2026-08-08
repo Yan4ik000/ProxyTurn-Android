@@ -21,12 +21,12 @@ const (
 	workerSendBuf      = 128
 	sessionReadTimeout = 30 * time.Minute
 	readBufSize        = 1600
-	socketBufSize      = 625 * 1024
+	socketBufSize      = 4 * 1024 * 1024
 	keepaliveByte      = 0xFF
 	keepaliveInterval  = 15 * time.Second
 )
 
-var handshakeSem = make(chan struct{}, 3)
+var handshakeSem = make(chan struct{}, 9)
 
 type connectedUDPConn struct{ *net.UDPConn }
 
