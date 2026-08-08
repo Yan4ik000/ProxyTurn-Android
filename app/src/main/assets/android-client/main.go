@@ -152,7 +152,6 @@ func main() {
 	connPassword := flag.String("password", "", "пароль подключения")
 	vkAuthMode := flag.String("vk-auth-mode", "vkcalls", "режим получения VK TURN-кредов (vkcalls/legacy)")
 	captchaMode := flag.String("captcha-mode", "auto", "режим обхода капчи (auto/wv/rjs)")
-	fingerprint := flag.String("fingerprint", "chrome", "браузерный фингерпринт (chrome, safari, ios, android, firefox)")
 	clientIdsFlag := flag.String("client-ids", "", "ID клиентов VK через запятую")
 	obfsMode := flag.String("obfs", "audio", "режим обфускации (audio/video)")
 	dynamicMode := flag.Bool("dynamic", false, "динамическое число воркеров")
@@ -179,9 +178,6 @@ func main() {
 		log.Fatalf("[КЛИЕНТ] Ошибка разбора пира: %v", err)
 	}
 
-	if *fingerprint != "" {
-		SetActiveFingerprint(*fingerprint)
-	}
 	if *clientIdsFlag != "" {
 		SetActiveClientIds(*clientIdsFlag)
 	}
@@ -266,7 +262,7 @@ func main() {
 	log.Println("[КЛИЕНТ] ═══════════════════════════════════════")
 	log.Printf("[КЛИЕНТ] VK Creds: Client IDs: %s", GetActiveClientIdsString())
 	log.Printf("[КЛИЕНТ] VK Auth: %s", activeVKAuthMode)
-	log.Printf("[КЛИЕНТ] TLS: %s fingerprint", GetActiveFingerprint())
+	log.Printf("[КЛИЕНТ] TLS: chrome fingerprint")
 	log.Printf("[КЛИЕНТ] Воркеров: %d (групп: %d, по %d)", *numW, numGroups, workersPerGroup)
 	log.Printf("[КЛИЕНТ] Хешей: %d", len(hashes))
 	log.Printf("[КЛИЕНТ] Слушаю: %s | Пир: %s", *listen, cleanPeerAddr)

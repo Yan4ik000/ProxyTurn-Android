@@ -43,8 +43,6 @@ class SettingsStore(context: Context) {
         private val NO_DTLS = booleanPreferencesKey("no_dtls")
         private val NO_DNS = booleanPreferencesKey("no_dns")
 
-        private val USER_AGENT = stringPreferencesKey("user_agent")
-
         private val DEPLOY_IP = stringPreferencesKey("deploy_ip")
         private val DEPLOY_LOGIN = stringPreferencesKey("deploy_login")
         private val DEPLOY_PASSWORD = stringPreferencesKey("deploy_password")
@@ -95,7 +93,6 @@ class SettingsStore(context: Context) {
         private val THEME_PALETTE = stringPreferencesKey("theme_palette")
 
         
-        private val SELECTED_FINGERPRINT = stringPreferencesKey("selected_fingerprint")
         private val ACTIVE_CLIENT_IDS = stringPreferencesKey("active_client_ids")
 
         private val UPDATE_LAST_CHECK_AT = longPreferencesKey("update_last_check_at")
@@ -117,7 +114,7 @@ class SettingsStore(context: Context) {
             val newName = "${baseKey.name}_$profile"
             @Suppress("UNCHECKED_CAST")
             return when (baseKey) {
-                PEER, VK_HASHES, SECONDARY_VK_HASH, PROTOCOL, SNI, USER_AGENT, DEPLOY_IP, DEPLOY_LOGIN, DEPLOY_PASSWORD, DEPLOY_PASSWORD_ENCRYPTED, DEPLOY_SSH_PORT, DEPLOY_DNS1, DEPLOY_DNS2, DEPLOY_SSH_PUBLIC_KEY, DEPLOY_SSH_PUBLIC_KEY_ENCRYPTED, DEPLOY_SSH_PRIVATE_KEY, DEPLOY_SSH_PRIVATE_KEY_ENCRYPTED, DEPLOY_SSH_KEY_PASSPHRASE, DEPLOY_SSH_KEY_PASSPHRASE_ENCRYPTED, EXCLUDED_APPS, CONNECTION_PASSWORD, CONNECTION_PASSWORD_ENCRYPTED, DEPLOY_MAIN_PASSWORD, DEPLOY_MAIN_PASSWORD_ENCRYPTED, DEPLOY_ADMIN_ID, DEPLOY_ADMIN_ID_ENCRYPTED, DEPLOY_BOT_TOKEN, DEPLOY_BOT_TOKEN_ENCRYPTED, PROXY_MODE, PROXY_HOST, VK_AUTH_MODE, OBFS_MODE, CAPTCHA_MODE, CAPTCHA_SOLVE_METHOD, CAPTCHA_WBV_SOLVE_METHOD, WDTT_LINK, SELECTED_FINGERPRINT, ACTIVE_CLIENT_IDS -> stringPreferencesKey(newName) as Preferences.Key<T>
+                PEER, VK_HASHES, SECONDARY_VK_HASH, PROTOCOL, SNI, DEPLOY_IP, DEPLOY_LOGIN, DEPLOY_PASSWORD, DEPLOY_PASSWORD_ENCRYPTED, DEPLOY_SSH_PORT, DEPLOY_DNS1, DEPLOY_DNS2, DEPLOY_SSH_PUBLIC_KEY, DEPLOY_SSH_PUBLIC_KEY_ENCRYPTED, DEPLOY_SSH_PRIVATE_KEY, DEPLOY_SSH_PRIVATE_KEY_ENCRYPTED, DEPLOY_SSH_KEY_PASSPHRASE, DEPLOY_SSH_KEY_PASSPHRASE_ENCRYPTED, EXCLUDED_APPS, CONNECTION_PASSWORD, CONNECTION_PASSWORD_ENCRYPTED, DEPLOY_MAIN_PASSWORD, DEPLOY_MAIN_PASSWORD_ENCRYPTED, DEPLOY_ADMIN_ID, DEPLOY_ADMIN_ID_ENCRYPTED, DEPLOY_BOT_TOKEN, DEPLOY_BOT_TOKEN_ENCRYPTED, PROXY_MODE, PROXY_HOST, VK_AUTH_MODE, OBFS_MODE, CAPTCHA_MODE, CAPTCHA_SOLVE_METHOD, CAPTCHA_WBV_SOLVE_METHOD, WDTT_LINK, ACTIVE_CLIENT_IDS -> stringPreferencesKey(newName) as Preferences.Key<T>
                 TOTAL_WORKERS, LISTEN_PORT, SERVER_DTLS_PORT, SERVER_WG_PORT, PROXY_PORT -> intPreferencesKey(newName) as Preferences.Key<T>
                 MANUAL_PORTS_ENABLED, NO_DTLS, NO_DNS, IS_WHITELIST, WDTT_LINK_MODE, DETAILED_LOGS, DEPLOY_SSH_KEY_AUTH, POWER_DYNAMIC -> booleanPreferencesKey(newName) as Preferences.Key<T>
                 else -> throw IllegalArgumentException("Unsupported key type: ${baseKey.name}")
@@ -194,10 +191,6 @@ class SettingsStore(context: Context) {
     val noDns: Flow<Boolean> = dataStore.data.map { prefs ->
         val profile = prefs[ACTIVE_PROFILE] ?: 0
         prefs[getProfileKey(NO_DNS, profile)] ?: false
-    }
-    val userAgent: Flow<String> = dataStore.data.map { prefs ->
-        val profile = prefs[ACTIVE_PROFILE] ?: 0
-        prefs[getProfileKey(USER_AGENT, profile)] ?: ""
     }
 
     val deployIp: Flow<String> = dataStore.data.map { prefs ->
@@ -318,10 +311,6 @@ class SettingsStore(context: Context) {
     val themePalette: Flow<String> = dataStore.data.map { it[THEME_PALETTE] ?: "indigo" }
 
     
-    val selectedFingerprint: Flow<String> = dataStore.data.map { prefs ->
-        val profile = prefs[ACTIVE_PROFILE] ?: 0
-        prefs[getProfileKey(SELECTED_FINGERPRINT, profile)] ?: "firefox"
-    }
     val activeClientIds: Flow<String> = dataStore.data.map { prefs ->
         val profile = prefs[ACTIVE_PROFILE] ?: 0
         prefs[getProfileKey(ACTIVE_CLIENT_IDS, profile)] ?: "8202606,6287487"
@@ -357,13 +346,6 @@ class SettingsStore(context: Context) {
     suspend fun saveThemePalette(palette: String) {
         dataStore.edit { prefs ->
             prefs[THEME_PALETTE] = palette
-        }
-    }
-
-    suspend fun saveFingerprint(fingerprint: String) {
-        dataStore.edit { prefs ->
-            val profile = prefs[ACTIVE_PROFILE] ?: 0
-            prefs[getProfileKey(SELECTED_FINGERPRINT, profile)] = fingerprint
         }
     }
 
@@ -427,7 +409,7 @@ class SettingsStore(context: Context) {
             val profile = (prefs[ACTIVE_PROFILE] ?: 0).coerceIn(0, 2)
 
             listOf(
-                PEER, VK_HASHES, SECONDARY_VK_HASH, PROTOCOL, SNI, USER_AGENT,
+                PEER, VK_HASHES, SECONDARY_VK_HASH, PROTOCOL, SNI,
                 DEPLOY_IP, DEPLOY_LOGIN, DEPLOY_PASSWORD, DEPLOY_PASSWORD_ENCRYPTED,
                 DEPLOY_SSH_PORT, DEPLOY_DNS1, DEPLOY_DNS2,
                 DEPLOY_SSH_PUBLIC_KEY, DEPLOY_SSH_PUBLIC_KEY_ENCRYPTED,
@@ -439,7 +421,7 @@ class SettingsStore(context: Context) {
                 DEPLOY_BOT_TOKEN, DEPLOY_BOT_TOKEN_ENCRYPTED,
                 PROXY_MODE, PROXY_HOST, VK_AUTH_MODE, OBFS_MODE,
                 CAPTCHA_MODE, CAPTCHA_SOLVE_METHOD, CAPTCHA_WBV_SOLVE_METHOD,
-                WDTT_LINK, SELECTED_FINGERPRINT, ACTIVE_CLIENT_IDS
+                WDTT_LINK, ACTIVE_CLIENT_IDS
             ).forEach { key -> prefs.remove(getProfileKey(key, profile)) }
 
             listOf(
@@ -515,13 +497,6 @@ class SettingsStore(context: Context) {
             prefs[getProfileKey(SERVER_DTLS_PORT, profile)] = serverDtlsPort
             prefs[getProfileKey(SERVER_WG_PORT, profile)] = serverWgPort
             prefs[getProfileKey(LISTEN_PORT, profile)] = listenPort
-        }
-    }
-
-    suspend fun saveUserAgent(ua: String) {
-        dataStore.edit { prefs ->
-            val profile = prefs[ACTIVE_PROFILE] ?: 0
-            prefs[getProfileKey(USER_AGENT, profile)] = ua
         }
     }
 

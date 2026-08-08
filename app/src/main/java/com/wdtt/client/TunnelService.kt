@@ -73,7 +73,6 @@ class TunnelService : Service() {
                     vkAuthMode = sanitizeVkAuthMode(intent.getStringExtra("vk_auth_mode")),
                     captchaMode = sanitizeCaptchaMode(intent.getStringExtra("captcha_mode")),
                     captchaSolveMethod = intent.getStringExtra("captcha_solve_method") ?: "auto",
-                    fingerprint = intent.getStringExtra("fingerprint") ?: "firefox",
                     clientIds = intent.getStringExtra("client_ids") ?: "8202606,6287487",
                     obfsMode = intent.getStringExtra("obfs_mode")?.takeIf { it.isNotBlank() } ?: "audio",
                     powerDynamic = intent.getBooleanExtra("power_dynamic", false)
@@ -125,7 +124,6 @@ class TunnelService : Service() {
                     vkAuthMode = sanitizeVkAuthMode(store.vkAuthMode.first()),
                     captchaMode = sanitizeCaptchaMode(store.captchaMode.first()),
                     captchaSolveMethod = store.captchaSolveMethod.first(),
-                    fingerprint = store.selectedFingerprint.first(),
                     clientIds = store.activeClientIds.first()
                 )
                 if (params.peer.isNotEmpty() && params.vkHashes.isNotEmpty()) {

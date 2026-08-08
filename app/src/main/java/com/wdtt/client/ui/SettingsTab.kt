@@ -144,7 +144,6 @@ fun SettingsTabContent(
     val wdttLinkMode by settingsStore.wdttLinkMode.collectAsStateWithLifecycle(initialValue = false)
     val wdttLink by settingsStore.wdttLink.collectAsStateWithLifecycle(initialValue = "")
 
-    val activeFingerprint by settingsStore.selectedFingerprint.collectAsStateWithLifecycle(initialValue = "firefox")
     val activeClientIds by settingsStore.activeClientIds.collectAsStateWithLifecycle(initialValue = "8202606,6287487")
     val clientIdCheckResultsJson by settingsStore.clientIdCheckResults.collectAsStateWithLifecycle(initialValue = "{}")
     val savedObfsMode by settingsStore.obfsMode.collectAsStateWithLifecycle(initialValue = "audio")
@@ -413,7 +412,6 @@ fun SettingsTabContent(
             putExtra("vk_auth_mode", effectiveVkAuthMode)
             putExtra("captcha_mode", effectiveCaptchaMode)
             putExtra("captcha_solve_method", effectiveCaptchaSolveMethod)
-            putExtra("fingerprint", activeFingerprint)
             putExtra("client_ids", activeClientIds)
             putExtra("obfs_mode", obfsMode)
             putExtra("power_dynamic", powerDynamic)
@@ -1147,22 +1145,6 @@ fun SettingsTabContent(
                         tint = MaterialTheme.colorScheme.error,
                         modifier = Modifier.size(22.dp)
                     )
-                }
-            }
-
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-
-            Text("Браузерный профиль", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                listOf("chrome" to "Chrome", "safari" to "Safari", "firefox" to "Firefox").forEach { (id, label) ->
-                    TechnicalChoice(
-                        label = label,
-                        selected = activeFingerprint == id,
-                        enabled = !tunnelRunning,
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        scope.launch { settingsStore.saveFingerprint(id) }
-                    }
                 }
             }
 
