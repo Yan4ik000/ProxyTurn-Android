@@ -1257,19 +1257,6 @@ private fun TunnelDashboard(
 ) {
     val dashboardScale = 1.12f
     val density = LocalDensity.current
-    val view = LocalView.current
-    var wasVerified by remember { mutableStateOf(false) }
-
-    LaunchedEffect(tunnelVerified) {
-        if (tunnelVerified && !wasVerified) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
-            } else {
-                view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
-            }
-        }
-        wasVerified = tunnelVerified
-    }
 
     Column(
         modifier = modifier.fillMaxSize().padding(16.dp),

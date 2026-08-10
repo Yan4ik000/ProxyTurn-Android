@@ -63,6 +63,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.font.FontWeight
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -261,6 +262,21 @@ fun MainScreen(
 
     LaunchedEffect(selectedTab) {
         if (selectedTab == 1) TunnelManager.clearUnreadErrors()
+    }
+
+    var hadTunnelConfig by remember { mutableStateOf(TunnelManager.config.value != null) }
+    LaunchedEffect(Unit) {
+        TunnelManager.config.collect { cfg ->
+            val hasConfig = cfg != null
+            if (hasConfig && !hadTunnelConfig) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
+                } else {
+                    view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                }
+            }
+            hadTunnelConfig = hasConfig
+        }
     }
 
     LaunchedEffect(updateCheckIntervalHours) {
@@ -470,32 +486,25 @@ private fun ProxyNavigationBar(
     val selectedColor = colors.primary
     val unselectedColor = colors.onSurfaceVariant.copy(alpha = 0.55f)
     val shellColor = if (isDark) {
-        colors.surface.copy(alpha = 0.78f)
+        lerp(colors.surface, colors.surfaceVariant, 0.12f).copy(alpha = 0.92f)
     } else {
-        lerp(colors.surface, colors.surfaceVariant, 0.48f).copy(alpha = 0.95f)
+        lerp(colors.surface, colors.surfaceVariant, 0.30f).copy(alpha = 0.96f)
     }
-    val shellBorder = if (isDark) {
-        colors.outlineVariant.copy(alpha = 0.42f)
-    } else {
-        colors.outline.copy(alpha = 0.16f)
-    }
-    val indicatorColor = if (isDark) {
-        colors.primaryContainer.copy(alpha = 0.84f)
-    } else {
-        lerp(colors.primaryContainer, colors.surface, 0.18f).copy(alpha = 0.97f)
-    }
+    val shellBorder = colors.outlineVariant.copy(alpha = 0.30f)
+    val indicatorColor = colors.primary.copy(alpha = 0.14f)
+    val indicatorBorder = colors.primary.copy(alpha = 0.28f)
     val selectedVisualIndex = remember(selectedTab, navItems) {
         navItems.indexOfFirst { it.id == selectedTab }.coerceAtLeast(0)
     }
     val indicatorIndex = remember { Animatable(selectedVisualIndex.toFloat()) }
     val dragVisualIndex = indicatorIndex.value
 
-    LaunchedEffect(selectedVisualIndex) {
-        if (dragTargetIndex !in navItems.indices) {
+    LaunchedEffect(selectedVisualIndex, dragTargetIndex) {
+        if (dragTargetIndex !in navItems.indices && indicatorIndex.value != selectedVisualIndex.toFloat()) {
             indicatorIndex.animateTo(
                 targetValue = selectedVisualIndex.toFloat(),
                 animationSpec = tween(
-                    durationMillis = 720,
+                    durationMillis = 480,
                     easing = CubicBezierEasing(0.2f, 0.9f, 0.24f, 1f)
                 )
             )
@@ -515,12 +524,12 @@ private fun ProxyNavigationBar(
             .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom))
             .padding(horizontal = 22.dp, vertical = 12.dp)
     ) {
-        val trackPadding = 8.dp
+        val trackPadding = 7.dp
         val itemWidth = (maxWidth - trackPadding * 2) / navItems.size
         val indicatorOffset = trackPadding + itemWidth * dragVisualIndex
 
         Surface(
-            shape = RoundedCornerShape(28.dp),
+            shape = RoundedCornerShape(30.dp),
             color = shellColor,
             border = BorderStroke(1.dp, shellBorder),
             tonalElevation = 0.dp,
@@ -530,11 +539,12 @@ private fun ProxyNavigationBar(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(72.dp)
+                    .height(68.dp)
             ) {
                 Surface(
-                    shape = RoundedCornerShape(22.dp),
+                    shape = RoundedCornerShape(21.dp),
                     color = indicatorColor,
+                    border = BorderStroke(1.dp, indicatorBorder),
                     modifier = Modifier
                         .offset(x = indicatorOffset)
                         .padding(vertical = 6.dp)
@@ -555,7 +565,7 @@ private fun ProxyNavigationBar(
                             modifier = Modifier
                                 .weight(1f)
                                 .fillMaxHeight()
-                                .clip(RoundedCornerShape(22.dp))
+                                .clip(RoundedCornerShape(21.dp))
                                 .clickable { onTabSelected(item.id) },
                             verticalArrangement = Arrangement.Center,
                             horizontalAlignment = Alignment.CenterHorizontally
@@ -564,16 +574,24 @@ private fun ProxyNavigationBar(
                                 Icon(
                                     imageVector = if (emphasis > 0.55f) item.selectedIcon else item.unselectedIcon,
                                     contentDescription = item.label,
-                                    modifier = Modifier.size(22.dp),
+                                    modifier = Modifier.size(21.dp),
                                     tint = iconColor
                                 )
                                 if (item.id == 1 && unreadErrors > 0) {
-                                    Badge(
-                                        containerColor = if (tunnelRunning) colors.primary else WDTTColors.warning,
-                                        contentColor = colors.onPrimary,
-                                        modifier = Modifier.offset(x = 12.dp, y = (-8).dp)
+                                    Surface(
+                                        shape = RoundedCornerShape(9.dp),
+                                        color = if (tunnelRunning) colors.primary else WDTTColors.warning,
+                                        border = BorderStroke(1.dp, colors.surface.copy(alpha = 0.6f)),
+                                        modifier = Modifier.offset(x = 13.dp, y = (-7).dp)
                                     ) {
-                                        Text("$unreadErrors")
+                                        Text(
+                                            text = "$unreadErrors",
+                                            color = if (tunnelRunning) colors.onPrimary else colors.surface,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 9.sp,
+                                            modifier = Modifier.padding(horizontal = 4.5.dp, vertical = 1.dp)
+                                        )
                                     }
                                 }
                             }
