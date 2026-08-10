@@ -21,8 +21,10 @@ data class LogEntry(
     val key: String,
     val message: String,
     val count: Int = 1,
-    val priority: Int = 99, 
-    val isError: Boolean = false
+    val priority: Int = 99,
+    val isError: Boolean = false,
+    val firstTimestamp: Long = 0L,
+    val lastTimestamp: Long = 0L
 )
 
 object TunnelManager {
@@ -161,14 +163,15 @@ object TunnelManager {
         logs.update { currentList ->
             val current = currentList.toMutableList()
             val index = current.indexOfFirst { it.key == key }
+            val now = System.currentTimeMillis()
 
             if (index != -1) {
                 
                 val entry = current[index]
-                current[index] = entry.copy(count = entry.count + 1, message = message, priority = priority, isError = isError)
+                current[index] = entry.copy(count = entry.count + 1, message = message, priority = priority, isError = isError, lastTimestamp = now)
             } else {
                 
-                current.add(LogEntry(key, message, 1, priority, isError))
+                current.add(LogEntry(key, message, 1, priority, isError, firstTimestamp = now, lastTimestamp = now))
             }
 
             
