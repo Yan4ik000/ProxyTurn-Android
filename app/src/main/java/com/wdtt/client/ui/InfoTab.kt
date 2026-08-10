@@ -12,7 +12,9 @@ import android.net.Uri
 import android.os.Build
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -24,6 +26,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -33,17 +36,15 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.GenericShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.automirrored.filled.HelpOutline
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Info
@@ -68,14 +69,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -84,14 +85,9 @@ import com.wdtt.client.R
 import com.wdtt.client.SettingsStore
 import com.wdtt.client.UPDATE_DIALOG_ACTION_POSTPONED
 import com.wdtt.client.UPDATE_DIALOG_ACTION_UPDATE
-import com.wdtt.client.WDTTColors
 import com.wdtt.client.fetchLatestReleaseInfo
 import com.wdtt.client.isNewerVersion
 import kotlinx.coroutines.launch
-import kotlin.math.PI
-import kotlin.math.cos
-import kotlin.math.min
-import kotlin.math.sin
 
 private const val ReleasesUrl = "https://github.com/Yan4ik000/ProxyTurn-Android/releases"
 private const val IssuesUrl = "https://github.com/Yan4ik000/ProxyTurn-Android/issues/new"
@@ -115,23 +111,6 @@ private val browserPackages = listOf(
     "com.kiwibrowser.browser",
 )
 
-private val Android16BlobShape: Shape = GenericShape { size, _ ->
-    val centerX = size.width / 2f
-    val centerY = size.height / 2f
-    val outerRadius = min(size.width, size.height) / 2f
-    val innerRadius = outerRadius * 0.92f
-    val points = 14
-
-    for (i in 0 until points * 2) {
-        val angle = (-PI / 2.0) + (i * PI / points)
-        val radius = if (i % 2 == 0) outerRadius else innerRadius
-        val x = centerX + (radius * cos(angle)).toFloat()
-        val y = centerY + (radius * sin(angle)).toFloat()
-        if (i == 0) moveTo(x, y) else lineTo(x, y)
-    }
-    close()
-}
-
 private fun openUrlInBrowser(context: Context, url: String) {
     try {
         val pm = context.packageManager
@@ -153,6 +132,35 @@ private fun openUrlInBrowser(context: Context, url: String) {
 }
 
 @Composable
+private fun infoTileColor(): Color {
+    val palette = MaterialTheme.colorScheme
+    val isDark = palette.background.luminance() < 0.22f
+    return if (isDark) {
+        lerp(palette.surface, palette.surfaceVariant, 0.22f)
+    } else {
+        lerp(palette.surface, palette.surfaceVariant, 0.42f)
+    }
+}
+
+@Composable
+private fun infoTileBorder(): Color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+
+@Composable
+private fun InfoIconTile(
+    accent: Color = MaterialTheme.colorScheme.primary,
+    size: androidx.compose.ui.unit.Dp = 40.dp,
+    content: @Composable () -> Unit
+) {
+    Surface(
+        shape = RoundedCornerShape(size * 0.4f),
+        color = accent.copy(alpha = 0.12f),
+        border = BorderStroke(1.dp, accent.copy(alpha = 0.22f))
+    ) {
+        Box(modifier = Modifier.size(size), contentAlignment = Alignment.Center) { content() }
+    }
+}
+
+@Composable
 fun InfoTab(
     actionsExpandedState: MutableState<Boolean> = rememberSaveable { mutableStateOf(true) },
     projectExpandedState: MutableState<Boolean> = rememberSaveable { mutableStateOf(true) }
@@ -169,6 +177,7 @@ fun InfoTab(
     val updateLatestVersion by settingsStore.updateLatestVersion.collectAsStateWithLifecycle(initialValue = "")
     val updateLastError by settingsStore.updateLastError.collectAsStateWithLifecycle(initialValue = "")
     val scrollState = rememberScrollState()
+    val hasUpdate = updateLatestVersion.isNotBlank() && isNewerVersion(currentVersion, updateLatestVersion)
     val updateStatus = remember(isCheckingUpdates, updateLatestVersion, updateLastError, currentVersion) {
         when {
             isCheckingUpdates -> "Проверяем GitHub releases..."
@@ -187,7 +196,7 @@ fun InfoTab(
             .padding(start = 16.dp, end = 16.dp, top = 0.dp, bottom = 12.dp)
             .verticalScrollEdgeFade(scrollState.canScrollBackward, scrollState.canScrollForward)
             .verticalScroll(scrollState),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         Row(
             modifier = Modifier
@@ -195,14 +204,25 @@ fun InfoTab(
                 .height(48.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                text = "Информация",
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                color = MaterialTheme.colorScheme.onSurface
-            )
+            Column {
+                Text(
+                    text = "Информация",
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = if (hasUpdate) "Доступно обновление $updateLatestVersion" else "Версия $currentVersion",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (hasUpdate) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
 
-        InfoHeroCard(currentVersion = currentVersion, onSupportClick = { openUrlInBrowser(context, RepositoryUrl) })
+        InfoHeroCard(
+            currentVersion = currentVersion,
+            hasUpdate = hasUpdate,
+            onSupportClick = { openUrlInBrowser(context, RepositoryUrl) }
+        )
 
         ExpandableSectionCard(
             title = "Действия",
@@ -219,20 +239,24 @@ fun InfoTab(
             }
         ) {
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(IntrinsicSize.Max),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 InfoActionTile(
                     title = "Поднять вопрос",
                     subtitle = "Открыть GitHub issue",
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight(),
                     onClick = { openUrlInBrowser(context, IssuesUrl) },
                     icon = {
                         Icon(
                             painter = painterResource(id = R.drawable.ic_github),
                             contentDescription = null,
                             modifier = Modifier.size(20.dp),
-                            tint = MaterialTheme.colorScheme.onPrimaryContainer
+                            tint = MaterialTheme.colorScheme.primary
                         )
                     }
                 )
@@ -240,7 +264,9 @@ fun InfoTab(
                 InfoActionTile(
                     title = "Собрать отчёт",
                     subtitle = "Android, ABI, версия, устройство",
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight(),
                     onClick = {
                         val clipboard = context.getSystemService(ClipboardManager::class.java)
                         clipboard?.setPrimaryClip(ClipData.newPlainText("WDTT Report", buildSupportReport()))
@@ -251,7 +277,7 @@ fun InfoTab(
                             imageVector = Icons.Default.ContentCopy,
                             contentDescription = null,
                             modifier = Modifier.size(20.dp),
-                            tint = MaterialTheme.colorScheme.onPrimaryContainer
+                            tint = MaterialTheme.colorScheme.primary
                         )
                     }
                 )
@@ -260,6 +286,7 @@ fun InfoTab(
             WideActionTile(
                 title = "Проверить обновления",
                 subtitle = updateStatus,
+                accent = MaterialTheme.colorScheme.primary,
                 onClick = {
                     if (isCheckingUpdates) return@WideActionTile
                     isCheckingUpdates = true
@@ -287,6 +314,12 @@ fun InfoTab(
                         if (isNewerVersion(currentVersion, release.versionTag)) {
                             settingsStore.saveUpdateDialogShown(release.versionTag, checkedAt)
                             pendingManualRelease = release
+                        } else if (isNewerVersion(release.versionTag, currentVersion)) {
+                            Toast.makeText(
+                                context,
+                                "У вас версия $currentVersion, хотя последняя - ${release.versionTag}. Вы путешественник во времени?",
+                                Toast.LENGTH_LONG
+                            ).show()
                         } else {
                             Toast.makeText(
                                 context,
@@ -301,7 +334,7 @@ fun InfoTab(
                         imageVector = Icons.Default.Update,
                         contentDescription = null,
                         modifier = Modifier.size(20.dp),
-                        tint = MaterialTheme.colorScheme.onPrimaryContainer
+                        tint = MaterialTheme.colorScheme.primary
                     )
                 }
             )
@@ -386,7 +419,7 @@ fun InfoTab(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 10.dp),
+                .padding(top = 8.dp),
             contentAlignment = Alignment.Center
         ) {
             Text(
@@ -404,130 +437,110 @@ fun InfoTab(
 }
 
 @Composable
-private fun InfoHeroCard(currentVersion: String, onSupportClick: () -> Unit) {
-    val colors = MaterialTheme.colorScheme
-    val isDark = colors.background.luminance() < 0.22f
-    val heroBrush = remember(colors.primaryContainer, colors.secondaryContainer, colors.surfaceVariant) {
-        Brush.linearGradient(
-            listOf(
-                colors.primaryContainer,
-                colors.secondaryContainer,
-                colors.surfaceVariant
-            )
-        )
-    }
-    val glassColor = if (isDark) colors.surface.copy(alpha = 0.46f) else Color.White.copy(alpha = 0.54f)
-    val glassBorder = colors.outlineVariant.copy(alpha = if (isDark) 0.50f else 0.32f)
+private fun InfoHeroCard(
+    currentVersion: String,
+    hasUpdate: Boolean,
+    onSupportClick: () -> Unit
+) {
+    val palette = MaterialTheme.colorScheme
+    val versionColor by animateColorAsState(
+        targetValue = if (hasUpdate) palette.primary else palette.onSurfaceVariant,
+        animationSpec = tween(400),
+        label = "hero_version_color"
+    )
 
-    Surface(
-        shape = RoundedCornerShape(32.dp),
-        color = Color.Transparent,
-        contentColor = MaterialTheme.colorScheme.onSurface,
-        shadowElevation = 0.dp,
-        tonalElevation = 0.dp
+    AppSectionCard(
+        contentPadding = PaddingValues(horizontal = 18.dp, vertical = 18.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(32.dp))
-                .background(heroBrush)
-                .padding(22.dp)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Surface(
+                shape = RoundedCornerShape(22.dp),
+                color = palette.primary.copy(alpha = 0.10f),
+                border = BorderStroke(1.dp, palette.primary.copy(alpha = 0.20f)),
+                modifier = Modifier.size(62.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        painter = painterResource(id = R.drawable.ic_tile_logo_w),
+                        contentDescription = null,
+                        tint = palette.primary,
+                        modifier = Modifier.size(34.dp)
+                    )
+                }
+            }
+
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(3.dp)
+            ) {
+                Text(
+                    text = "WDTT",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = palette.onSurface
+                )
+                Text(
+                    text = "WireGuard · DTLS · TURN",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = palette.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = versionColor.copy(alpha = 0.10f),
+                border = BorderStroke(1.dp, versionColor.copy(alpha = 0.22f))
+            ) {
+                Text(
+                    text = currentVersion,
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = versionColor
+                )
+            }
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(7.dp)
         ) {
             Box(
                 modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .offset(x = 30.dp, y = (-34).dp)
-                    .size(138.dp)
-                    .clip(Android16BlobShape)
-                    .background(colors.primary.copy(alpha = 0.10f))
+                    .size(7.dp)
+                    .clip(CircleShape)
+                    .background(versionColor)
             )
-            Box(
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .offset(x = 26.dp, y = 30.dp)
-                    .size(112.dp)
-                    .clip(Android16BlobShape)
-                    .background(colors.secondary.copy(alpha = 0.12f))
+            Text(
+                text = if (hasUpdate) "Есть новая версия — проверьте обновления" else "Приложение актуально",
+                style = MaterialTheme.typography.labelMedium,
+                color = versionColor
             )
-
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(18.dp)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    HeroMetaPill(
-                        text = "WDTT",
-                        containerColor = glassColor,
-                        borderColor = glassBorder,
-                        modifier = Modifier.weight(1f)
-                    )
-                    HeroMetaPill(
-                        text = currentVersion,
-                        containerColor = colors.primary.copy(alpha = if (isDark) 0.18f else 0.10f),
-                        borderColor = colors.primary.copy(alpha = if (isDark) 0.22f else 0.14f),
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(
-                        text = "WIREGUARD DTLS TURN TUNNEL",
-                        style = MaterialTheme.typography.titleMedium.copy(
-                            fontWeight = FontWeight.Black,
-                            fontSize = 18.sp,
-                            lineHeight = 22.sp
-                        ),
-                        maxLines = 1,
-                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                        color = colors.onSurface
-                    )
-                }
-
-                Button(
-                    onClick = onSupportClick,
-                    shape = RoundedCornerShape(22.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primary,
-                        contentColor = MaterialTheme.colorScheme.onPrimary
-                    ),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(54.dp)
-                ) {
-                    Icon(Icons.Default.Star, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Поддержать проект звездой", fontWeight = FontWeight.Bold, fontSize = 15.sp)
-                }
-            }
         }
-    }
-}
 
-@Composable
-private fun HeroMetaPill(
-    text: String,
-    containerColor: Color,
-    borderColor: Color,
-    modifier: Modifier = Modifier
-) {
-    Surface(
-        shape = RoundedCornerShape(18.dp),
-        color = containerColor,
-        border = BorderStroke(1.dp, borderColor),
-        modifier = modifier
-    ) {
-        Text(
-            text = text,
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
-            style = MaterialTheme.typography.labelLarge,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurface,
-            textAlign = TextAlign.Center
-        )
+        Button(
+            onClick = onSupportClick,
+            shape = RoundedCornerShape(18.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = palette.primary,
+                contentColor = palette.onPrimary
+            ),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(50.dp)
+        ) {
+            Icon(Icons.Default.Star, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("Поддержать проект звездой", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+        }
     }
 }
 
@@ -546,21 +559,19 @@ private fun ExpandableSectionCard(
     )
 
     AppSectionCard(
-        contentPadding = PaddingValues(horizontal = 18.dp, vertical = 18.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp),
+        verticalArrangement = Arrangement.spacedBy(0.dp)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(24.dp))
+                .clip(RoundedCornerShape(20.dp))
                 .clickable(onClick = onToggle)
                 .padding(vertical = 2.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Surface(shape = RoundedCornerShape(18.dp), color = MaterialTheme.colorScheme.primaryContainer) {
-                Box(modifier = Modifier.size(40.dp), contentAlignment = Alignment.Center) { icon() }
-            }
+            InfoIconTile { icon() }
 
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
                 Text(
@@ -589,6 +600,7 @@ private fun ExpandableSectionCard(
             exit = shrinkVertically() + fadeOut()
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Spacer(modifier = Modifier.height(0.dp))
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.30f))
                 content()
             }
@@ -599,13 +611,13 @@ private fun ExpandableSectionCard(
 @Composable
 private fun MetaChip(text: String) {
     Surface(
-        shape = RoundedCornerShape(14.dp),
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.88f),
-        contentColor = MaterialTheme.colorScheme.onSurface
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.08f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.30f))
     ) {
         Text(
             text = text,
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
             style = MaterialTheme.typography.labelMedium,
             fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -622,23 +634,22 @@ private fun InfoActionTile(
     icon: @Composable () -> Unit
 ) {
     Surface(
-        shape = RoundedCornerShape(24.dp),
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.70f),
+        shape = RoundedCornerShape(20.dp),
+        color = infoTileColor(),
         contentColor = MaterialTheme.colorScheme.onSurface,
+        border = BorderStroke(1.dp, infoTileBorder()),
         modifier = modifier
-            .clip(RoundedCornerShape(24.dp))
+            .clip(RoundedCornerShape(20.dp))
             .clickable(onClick = onClick)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(min = 116.dp)
+                .heightIn(min = 112.dp)
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Surface(shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.primaryContainer) {
-                Box(modifier = Modifier.size(40.dp), contentAlignment = Alignment.Center) { icon() }
-            }
+            InfoIconTile { icon() }
 
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(
@@ -662,28 +673,28 @@ private fun InfoActionTile(
 private fun WideActionTile(
     title: String,
     subtitle: String,
+    accent: Color = MaterialTheme.colorScheme.primary,
     onClick: () -> Unit,
     icon: @Composable () -> Unit
 ) {
     Surface(
-        shape = RoundedCornerShape(24.dp),
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.70f),
+        shape = RoundedCornerShape(20.dp),
+        color = infoTileColor(),
         contentColor = MaterialTheme.colorScheme.onSurface,
+        border = BorderStroke(1.dp, infoTileBorder()),
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(24.dp))
+            .clip(RoundedCornerShape(20.dp))
             .clickable(onClick = onClick)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 15.dp),
+                .padding(horizontal = 14.dp, vertical = 14.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Surface(shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.primaryContainer) {
-                Box(modifier = Modifier.size(40.dp), contentAlignment = Alignment.Center) { icon() }
-            }
+            InfoIconTile(accent = accent) { icon() }
 
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 Text(
@@ -718,29 +729,23 @@ private fun ProjectLinkRow(
     icon: @Composable () -> Unit
 ) {
     Surface(
-        shape = RoundedCornerShape(24.dp),
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.64f),
+        shape = RoundedCornerShape(20.dp),
+        color = infoTileColor(),
         contentColor = MaterialTheme.colorScheme.onSurface,
+        border = BorderStroke(1.dp, infoTileBorder()),
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(24.dp))
+            .clip(RoundedCornerShape(20.dp))
             .clickable(onClick = onClick)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 14.dp),
+                .padding(horizontal = 14.dp, vertical = 13.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Surface(shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.primaryContainer) {
-                Box(
-                    modifier = Modifier.defaultMinSize(minWidth = 40.dp, minHeight = 40.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    icon()
-                }
-            }
+            InfoIconTile(accent = MaterialTheme.colorScheme.primary) { icon() }
 
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(
