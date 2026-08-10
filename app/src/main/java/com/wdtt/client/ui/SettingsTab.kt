@@ -63,6 +63,8 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
+import android.view.HapticFeedbackConstants
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.Density
@@ -1267,6 +1269,19 @@ private fun TunnelDashboard(
 ) {
     val dashboardScale = 1.12f
     val density = LocalDensity.current
+    val view = LocalView.current
+    var wasVerified by remember { mutableStateOf(false) }
+
+    LaunchedEffect(tunnelVerified) {
+        if (tunnelVerified && !wasVerified) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
+            } else {
+                view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+            }
+        }
+        wasVerified = tunnelVerified
+    }
 
     Column(
         modifier = modifier.fillMaxSize().padding(16.dp),
@@ -1504,6 +1519,7 @@ private fun AuroraPowerButton(
 ) {
     val palette = MaterialTheme.colorScheme
     val connecting = tunnelRunning && !tunnelVerified
+    val view = LocalView.current
 
     val scale by animateFloatAsState(
         targetValue = if (tunnelRunning) 1.10f else 0.96f,
@@ -1651,7 +1667,10 @@ private fun AuroraPowerButton(
                 .scale(scale)
                 .shadow(elevation = 14.dp, shape = CircleShape)
                 .clip(CircleShape)
-                .clickable(enabled = enabled, onClick = onToggle),
+                .clickable(enabled = enabled) {
+                    view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                    onToggle()
+                },
             contentAlignment = Alignment.Center
         ) {
             Canvas(modifier = Modifier.fillMaxSize()) {
