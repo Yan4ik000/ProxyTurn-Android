@@ -234,7 +234,7 @@ object TunnelManager {
 
                 val hashCount = hashList.size.coerceIn(1, 4)
                 val totalWorkers = if (params.powerDynamic) {
-                    (hashCount * 27).coerceIn(9, 108)
+                    (hashCount * 36).coerceIn(36, 144)
                 } else {
                     params.totalWorkers.coerceIn(1, 128)
                 }

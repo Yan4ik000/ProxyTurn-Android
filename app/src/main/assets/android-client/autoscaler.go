@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"log"
 	"net"
 	"sync"
 	"sync/atomic"
@@ -15,12 +14,13 @@ const (
 	scaleUpSustainSecs     = 2
 	scaleDownThreshold     = 0.15
 	scaleDownSustainSecs   = 20
-	scaleUpCooldown        = 10 * time.Second
+	scaleUpCooldown        = 5 * time.Second
 	scaleDownCooldown      = 45 * time.Second
+	scaleSettleDelay       = 3 * time.Second
 	scaleUpRatePerWorker   = 150 * 1024
 	scaleDownRatePerWorker = 100 * 1024
-	awakeMinGroups         = 3
-	sleepMinGroups         = 1
+	awakeMinGroups         = 4
+	sleepMinGroups         = 2
 	sleepAfterSecs         = 300
 	minAwakeSecs           = 90
 )
@@ -105,10 +105,20 @@ func (a *Autoscaler) dropLastGroup() {
 	}
 	cancel := a.groupCancels[len(a.groupCancels)-1]
 	a.groupCancels = a.groupCancels[:len(a.groupCancels)-1]
-	remaining := len(a.groupCancels)
 	a.mu.Unlock()
-	log.Printf("[АВТО] Убираю группу воркеров, осталось групп: %d", remaining)
 	cancel()
+}
+
+func (a *Autoscaler) isSpawning() bool {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.spawning
+}
+
+func (a *Autoscaler) groups() int {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return len(a.groupCancels)
 }
 
 func (a *Autoscaler) Run() {
@@ -121,7 +131,6 @@ func (a *Autoscaler) Run() {
 
 	upStreak := 0
 	downStreak := 0
-	statusTick := 0
 	lastScale := time.Now()
 	lastWake := time.Now()
 	lastBytes := a.stats.TotalBytesUp.Load() + a.stats.TotalBytesDown.Load()
@@ -144,6 +153,14 @@ func (a *Autoscaler) Run() {
 		rate := float64(totalBytes - lastBytes)
 		lastBytes = totalBytes
 
+		// Пока идёт спавн группы или группа ещё гаснет после scale-действия,
+		// таймеры sustain не тикают: отсчёт начинается после завершения процесса.
+		if a.isSpawning() || time.Since(lastScale) < scaleSettleDelay {
+			upStreak = 0
+			downStreak = 0
+			continue
+		}
+
 		active := a.stats.ActiveConnections.Load()
 		if active < 1 {
 			active = 1
@@ -163,21 +180,9 @@ func (a *Autoscaler) Run() {
 			downStreak = 0
 		}
 
-		a.mu.Lock()
-		groups := len(a.groupCancels)
-		spawning := a.spawning
-		a.mu.Unlock()
+		groups := a.groups()
 
-		statusTick++
-		if statusTick >= 15 {
-			statusTick = 0
-			log.Printf("[АВТО] Скорость: %.0f КБ/с общая, %.0f КБ/с на воркера (активных %d), групп %d/%d",
-				rate/1024, perWorkerRate/1024, active, groups, a.maxGroups)
-		}
-
-		if a.floorGroups == sleepMinGroups && upStreak >= scaleUpSustainSecs && !spawning {
-			log.Printf("[АВТО] Нагрузка %.1f КБ/с на воркера — пробуждение до %d воркеров",
-				perWorkerRate/1024, awakeMinGroups*workersPerGroup)
+		if a.floorGroups == sleepMinGroups && upStreak >= scaleUpSustainSecs {
 			a.floorGroups = awakeMinGroups
 			lastWake = time.Now()
 			upStreak = 0
@@ -186,10 +191,8 @@ func (a *Autoscaler) Run() {
 		}
 
 		if a.floorGroups == awakeMinGroups && groups <= awakeMinGroups &&
-			downStreak >= sleepAfterSecs && !spawning &&
+			downStreak >= sleepAfterSecs &&
 			time.Since(lastWake) >= minAwakeSecs*time.Second {
-			log.Printf("[АВТО] Нет нагрузки %d мин — снижаю базу до %d воркеров",
-				sleepAfterSecs/60, sleepMinGroups*workersPerGroup)
 			a.floorGroups = sleepMinGroups
 			for len(a.groupCancels) > sleepMinGroups {
 				a.dropLastGroup()
@@ -200,7 +203,7 @@ func (a *Autoscaler) Run() {
 			continue
 		}
 
-		if groups < a.floorGroups && groups < a.maxGroups && !spawning {
+		if groups < a.floorGroups && groups < a.maxGroups {
 			a.spawnGroup()
 			lastScale = time.Now()
 			upStreak = 0
@@ -208,10 +211,8 @@ func (a *Autoscaler) Run() {
 			continue
 		}
 
-		if upStreak >= scaleUpSustainSecs && groups < a.maxGroups && !spawning &&
+		if upStreak >= scaleUpSustainSecs && groups < a.maxGroups &&
 			time.Since(lastScale) >= scaleUpCooldown {
-			log.Printf("[АВТО] Нагрузка %.1f МБ/с на воркера (очереди %.0f%%) уже %dс — добавляю группу (%d/%d)",
-				perWorkerRate/1048576, fill*100, scaleUpSustainSecs, groups+1, a.maxGroups)
 			a.spawnGroup()
 			lastScale = time.Now()
 			upStreak = 0
@@ -219,10 +220,8 @@ func (a *Autoscaler) Run() {
 			continue
 		}
 
-		if downStreak >= scaleDownSustainSecs && groups > a.floorGroups && !spawning &&
+		if downStreak >= scaleDownSustainSecs && groups > a.floorGroups &&
 			time.Since(lastScale) >= scaleDownCooldown {
-			log.Printf("[АВТО] Нагрузка %.1f КБ/с на воркера уже %dс — снижаю мощность",
-				perWorkerRate/1024, scaleDownSustainSecs)
 			a.dropLastGroup()
 			lastScale = time.Now()
 			upStreak = 0
