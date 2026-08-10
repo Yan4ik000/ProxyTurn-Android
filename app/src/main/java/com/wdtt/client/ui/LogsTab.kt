@@ -388,7 +388,11 @@ fun LogLine(entry: LogEntry) {
     )
 
     var trigger by remember { mutableIntStateOf(0) }
-    LaunchedEffect(entry.count) { trigger++ }
+    var seenCount by rememberSaveable { mutableIntStateOf(entry.count) }
+    LaunchedEffect(entry.count) {
+        if (entry.count != seenCount) trigger++
+        seenCount = entry.count
+    }
 
     val animatedScale by animateFloatAsState(
         targetValue = if (trigger > 0) 1.15f else 1.0f,

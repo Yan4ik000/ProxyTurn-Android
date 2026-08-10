@@ -18,11 +18,16 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -227,11 +232,7 @@ fun MainScreen(
     var pendingRelease by remember { mutableStateOf<AppReleaseInfo?>(null) }
     val currentVersion = remember { "v${BuildConfig.VERSION_NAME.removePrefix("v")}" }
     val safeBottomInset = with(density) { WindowInsets.safeDrawing.getBottom(density).toDp() }
-    val navOverlayReserve = safeBottomInset + when (selectedTab) {
-        0 -> 94.dp
-        2 -> 78.dp
-        else -> 96.dp
-    }
+    val navOverlayReserve = safeBottomInset + 94.dp
 
     val activeNavItems = navItems
     val actionsExpanded = rememberSaveable { mutableStateOf(false) }
@@ -370,7 +371,13 @@ fun MainScreen(
                 AnimatedContent(
                     targetState = selectedTab,
                     transitionSpec = {
-                        fadeIn(tween(300)) togetherWith fadeOut(tween(225))
+                        if (targetState > initialState) {
+                            (slideInHorizontally(tween(320)) { it } + fadeIn(tween(260))) togetherWith
+                                (slideOutHorizontally(tween(280)) { -it } + fadeOut(tween(180)))
+                        } else {
+                            (slideInHorizontally(tween(320)) { -it } + fadeIn(tween(260))) togetherWith
+                                (slideOutHorizontally(tween(280)) { it } + fadeOut(tween(180)))
+                        }
                     },
                     modifier = Modifier
                         .fillMaxSize(),
@@ -380,18 +387,23 @@ fun MainScreen(
                         0 -> SettingsTab(
                             mainPageBottomPadding = navOverlayReserve,
                             onNestedPageChanged = { nestedPageKind = it },
-                            mainPageOverlay = navigationBar
+                            mainPageOverlay = {}
                         )
-                        1 -> Box(Modifier.fillMaxSize()) {
-                            Box(Modifier.fillMaxSize().padding(bottom = navOverlayReserve)) { LogsTab() }
-                            navigationBar()
+                        1 -> Box(Modifier.fillMaxSize().padding(bottom = navOverlayReserve)) { LogsTab() }
+                        2 -> Box(Modifier.fillMaxSize().padding(bottom = navOverlayReserve)) {
+                            InfoTab(actionsExpandedState = actionsExpanded, projectExpandedState = projectExpanded)
                         }
-                        2 -> Box(Modifier.fillMaxSize()) {
-                            Box(Modifier.fillMaxSize().padding(bottom = navOverlayReserve)) {
-                                InfoTab(actionsExpandedState = actionsExpanded, projectExpandedState = projectExpanded)
-                            }
-                            navigationBar()
-                        }
+                    }
+                }
+
+                AnimatedVisibility(
+                    visible = nestedPageKind == 0,
+                    enter = slideInVertically(tween(320)) { it } + fadeIn(tween(260)),
+                    exit = slideOutVertically(tween(280)) { it } + fadeOut(tween(180)),
+                    modifier = Modifier.align(Alignment.BottomCenter)
+                ) {
+                    Box(modifier = Modifier.fillMaxWidth()) {
+                        navigationBar()
                     }
                 }
             }
