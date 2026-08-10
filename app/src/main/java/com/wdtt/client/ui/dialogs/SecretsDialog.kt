@@ -47,15 +47,10 @@ fun SecretsDialog(
     val isPasswordValid = passwordInput.isNotEmpty() && passwordInput.matches(Regex("^[a-zA-Z0-9_.!?:#/-]+$"))
 
     Dialog(onDismissRequest = onDismiss) {
-        Surface(
-            shape = RoundedCornerShape(24.dp),
-            color = MaterialTheme.colorScheme.surface,
-            contentColor = MaterialTheme.colorScheme.onSurface,
-            tonalElevation = 8.dp
-        ) {
+        AppDialogSurface {
             Column(
                 modifier = Modifier
-                    .padding(24.dp)
+                    .padding(20.dp)
                     .fillMaxWidth()
             ) {
                 Column(
@@ -69,25 +64,18 @@ fun SecretsDialog(
                     )
                     .verticalScroll(scrollState)
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                AppDialogHeader(
+                    title = "Секреты",
+                    onClose = onDismiss,
+                    icon = {
                         Icon(
                             imageVector = Icons.Default.Key,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(24.dp)
+                            modifier = Modifier.size(20.dp)
                         )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Секреты", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                     }
-                    IconButton(onClick = onDismiss) {
-                        Icon(imageVector = Icons.Default.Close, contentDescription = "Закрыть")
-                    }
-                }
+                )
 
                 Spacer(modifier = Modifier.height(16.dp))
 
@@ -107,10 +95,10 @@ fun SecretsDialog(
 
                 if (manualPortsEnabled) {
                     Spacer(modifier = Modifier.height(16.dp))
-                    HorizontalDivider()
-                    Spacer(modifier = Modifier.height(8.dp))
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.30f))
+                    Spacer(modifier = Modifier.height(12.dp))
                     Text("Порты", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
                     OutlinedTextField(
                         value = serverDtlsPort,
                         onValueChange = { serverDtlsPort = it.filter(Char::isDigit).take(5) },
@@ -121,7 +109,7 @@ fun SecretsDialog(
                         shape = RoundedCornerShape(16.dp),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
                     )
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
                     OutlinedTextField(
                         value = serverWgPort,
                         onValueChange = { serverWgPort = it.filter(Char::isDigit).take(5) },
@@ -134,11 +122,9 @@ fun SecretsDialog(
                     )
                 }
 
-                Spacer(modifier = Modifier.height(22.dp))
-
                 }
 
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(16.dp))
 
                 Button(
                     onClick = {

@@ -18,21 +18,24 @@ fun UninstallConfirmDialog(onDismiss: () -> Unit, onConfirm: () -> Unit) {
     val isConfirmed = confirmText.trim().lowercase() == "да"
 
     Dialog(onDismissRequest = onDismiss) {
-        Surface(
-            shape = RoundedCornerShape(24.dp),
-            color = MaterialTheme.colorScheme.surface,
-            contentColor = MaterialTheme.colorScheme.onSurface,
-            tonalElevation = 8.dp
-        ) {
-            Column(modifier = Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                Text(
-                    "Удаление WDTT с сервера",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.error
+        AppDialogSurface {
+            Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                AppDialogHeader(
+                    title = "Удаление WDTT с сервера",
+                    subtitle = "Действие необратимо",
+                    accent = MaterialTheme.colorScheme.error,
+                    onClose = onDismiss,
+                    icon = {
+                        Icon(
+                            imageVector = Icons.Default.Delete,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
                 )
                 Text(
-                    "Будут удалены: бинарник, systemd-сервис, бот, конфигурация WDTT и только помеченные правила firewall/NAT для WDTT.\n\nЭто действие необратимо.",
+                    "Будут удалены: бинарник, systemd-сервис, бот, конфигурация WDTT и только помеченные правила firewall/NAT для WDTT.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

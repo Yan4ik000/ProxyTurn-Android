@@ -29,6 +29,8 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.wdtt.client.R
+import com.wdtt.client.ui.dialogs.AppDialogHeader
+import com.wdtt.client.ui.dialogs.AppDialogSurface
 import kotlin.math.roundToInt
 
 @Composable
@@ -98,20 +100,24 @@ fun FloatingToolbar(
                 onDismissRequest = { isExpanded = false },
                 properties = DialogProperties(usePlatformDefaultWidth = false)
             ) {
-                Surface(
-                    shape = RoundedCornerShape(32.dp),
-                    color = MaterialTheme.colorScheme.surface,
+                AppDialogSurface(
                     modifier = Modifier.fillMaxWidth(0.88f)
                 ) {
                     Column(
-                        modifier = Modifier.padding(18.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                        modifier = Modifier.padding(20.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        Text(
-                            "Оформление",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
+                        AppDialogHeader(
+                            title = "Оформление",
+                            onClose = { isExpanded = false },
+                            icon = {
+                                Icon(
+                                    painter = painterResource(R.drawable.ic_palette),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(20.dp),
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            }
                         )
 
                         ThemeOption(R.drawable.ic_auto, "Системная", currentTheme == "system") {
@@ -141,7 +147,7 @@ fun FloatingToolbar(
                         }
 
                         AnimatedVisibility(visible = !dynamicEnabled) {
-                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                                 Text("Палитра", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {

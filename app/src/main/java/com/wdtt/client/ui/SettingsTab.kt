@@ -80,6 +80,8 @@ import com.wdtt.client.R
 import com.wdtt.client.TunnelManager
 import com.wdtt.client.TunnelService
 import com.wdtt.client.WDTTColors
+import com.wdtt.client.ui.dialogs.AppDialogHeader
+import com.wdtt.client.ui.dialogs.AppDialogSurface
 import com.wdtt.client.ui.dialogs.HashesDialog
 import com.wdtt.client.ui.dialogs.SecretsDialog
 import com.wdtt.client.ui.components.verticalScrollEdgeFade
@@ -488,47 +490,33 @@ fun SettingsTabContent(
 
     if (showClearProfileDialog) {
         Dialog(onDismissRequest = { showClearProfileDialog = false }) {
-            Surface(
-                shape = RoundedCornerShape(24.dp),
-                color = MaterialTheme.colorScheme.surface,
-                contentColor = MaterialTheme.colorScheme.onSurface,
-                tonalElevation = 8.dp
-            ) {
+            AppDialogSurface {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(24.dp)
+                        .padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                    AppDialogHeader(
+                        title = "Очистка профиля",
+                        subtitle = "Текущие поля будут сброшены",
+                        accent = MaterialTheme.colorScheme.error,
+                        onClose = { showClearProfileDialog = false },
+                        icon = {
                             Icon(
                                 imageVector = Icons.Outlined.Delete,
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.error,
-                                modifier = Modifier.size(24.dp)
-                            )
-                            Spacer(Modifier.width(8.dp))
-                            Text(
-                                "Очистка профиля",
-                                style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.Bold
+                                modifier = Modifier.size(20.dp)
                             )
                         }
-                        IconButton(onClick = { showClearProfileDialog = false }) {
-                            Icon(Icons.Default.Close, contentDescription = "Закрыть")
-                        }
-                    }
+                    )
 
-                    Spacer(Modifier.height(16.dp))
                     Text(
                         "Вы точно хотите очистить текущий профиль?",
-                        style = MaterialTheme.typography.bodyLarge
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    Spacer(Modifier.height(24.dp))
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),

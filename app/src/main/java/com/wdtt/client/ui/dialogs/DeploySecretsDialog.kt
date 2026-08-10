@@ -74,20 +74,14 @@ fun DeploySecretsPage(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 4.dp, vertical = 4.dp),
+                .padding(horizontal = 12.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            IconButton(onClick = onBack, enabled = !isSaving) {
-                Icon(
-                    Icons.Default.ArrowBack,
-                    contentDescription = "Назад",
-                    tint = MaterialTheme.colorScheme.onSurface
-                )
-            }
+            AppDialogBackButton(onClick = { if (!isSaving) onBack() })
             Text(
                 "Секреты деплоя",
-                style = MaterialTheme.typography.titleLarge,
+                style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurface
             )
@@ -130,7 +124,7 @@ fun DeploySecretsPage(
             if (sshKeyAuth) {
                 AppSectionCard(
                     contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Text("SSH ключ", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
                     HorizontalDivider()
@@ -176,7 +170,7 @@ fun DeploySecretsPage(
 
             AppSectionCard(
                 contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Text("Телеграм бот для управления", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
                 HorizontalDivider()
@@ -205,7 +199,7 @@ fun DeploySecretsPage(
 
             AppSectionCard(
                 contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Text("SSH порт", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
                 HorizontalDivider()
@@ -225,7 +219,7 @@ fun DeploySecretsPage(
             if (manualPortsEnabled) {
                 AppSectionCard(
                     contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Text("Порты сервера", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
                     HorizontalDivider()
@@ -289,7 +283,7 @@ fun DeploySecretsPage(
             },
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 10.dp)
+                .padding(horizontal = 16.dp, vertical = 12.dp)
                 .height(48.dp),
             shape = RoundedCornerShape(16.dp),
             enabled = isPasswordValid && !isSaving,
