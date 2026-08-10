@@ -175,13 +175,15 @@ WDTT-сервер поддерживает две модели подключе�
 > Если возникла проблема, приложите к `issue` отчёт из раздела **«Информация»**, скриншот вкладки **«Логи»**, версию APK, ABI сборки и описание сети. Мелкие повторяющиеся ошибки в логах не всегда означают поломку, если туннель остаётся активным.
 ## Сборка
 
-```bash
-export ANDROID_NDK_HOME=/path/to/android-ndk
-./scripts/build-native-libs.sh
-./gradlew :app:assembleDebug
+```bat
+scripts\build.bat
 ```
 
-Одна ABI: `./scripts/build-go-lib.sh arm64-v8a`
+```bash
+bash scripts/build.sh
+```
+
+Без аргументов откроется GUI меню. Справка и режим CLI: `--help`.
 
 > [!WARNING]
 > ### Назначение проекта и дисклеймер

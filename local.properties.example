@@ -1,0 +1,5 @@
+# Copy this file to local.properties and fill in local values. local.properties is ignored by Git to keep local paths and signing secrets out of the repository.
+KEYSTORE_FILE=../release.keystore
+KEYSTORE_PASSWORD=
+KEY_ALIAS=proxyturn-android-release
+KEY_PASSWORD=

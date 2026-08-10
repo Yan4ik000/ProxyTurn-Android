@@ -14,6 +14,7 @@ captures/
 *.apk
 *.aab
 /app/src/main/assets/server
+/app/src/main/assets/server-arm64
 /app/src/main/jniLibs/
 .DS_Store
 Thumbs.db
